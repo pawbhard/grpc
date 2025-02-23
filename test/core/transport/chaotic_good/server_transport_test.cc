@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -30,7 +31,6 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_format.h"
-#include "absl/types/optional.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "src/core/ext/transport/chaotic_good/chaotic_good_frame.pb.h"
@@ -45,8 +45,9 @@
 #include "src/core/util/ref_counted_ptr.h"
 #include "test/core/event_engine/fuzzing_event_engine/fuzzing_event_engine.h"
 #include "test/core/event_engine/fuzzing_event_engine/fuzzing_event_engine.pb.h"
-#include "test/core/transport/chaotic_good/transport_test.h"
+#include "test/core/transport/chaotic_good/transport_test_helper.h"
 #include "test/core/transport/util/mock_promise_endpoint.h"
+#include "test/core/transport/util/transport_test.h"
 
 using testing::_;
 using testing::MockFunction;

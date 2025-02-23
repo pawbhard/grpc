@@ -300,9 +300,10 @@ class ChaoticGoodChannelFactory final : public ClientChannelFactory {
 
 grpc_channel* grpc_chaotic_good_channel_create(const char* target,
                                                const grpc_channel_args* args) {
-  if (grpc_core::IsChaoticGoodLegacyProtocolEnabled()) {
+  if (!grpc_core::IsChaoticGoodFramingLayerEnabled()) {
     return grpc_chaotic_good_legacy_channel_create(target, args);
   }
+
   grpc_core::ExecCtx exec_ctx;
   GRPC_TRACE_LOG(api, INFO)
       << "grpc_chaotic_good_channel_create(target=" << target

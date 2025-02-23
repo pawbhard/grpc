@@ -357,7 +357,7 @@ auto ChaoticGoodServerListener::ActiveConnection::HandshakingState::
     ControlEndpointWriteSettingsFrame(RefCountedPtr<HandshakingState> self) {
   SettingsFrame frame;
   frame.body.set_data_channel(false);
-  absl::get<ControlConnection>(self->data_)
+  std::get<ControlConnection>(self->data_)
       .config.PrepareServerOutgoingSettings(frame.body);
   SliceBuffer write_buffer;
   frame.MakeHeader().Serialize(
@@ -369,7 +369,7 @@ auto ChaoticGoodServerListener::ActiveConnection::HandshakingState::
             new ChaoticGoodServerTransport(
                 self->connection_->args(),
                 std::move(self->connection_->endpoint_),
-                std::move(absl::get<ControlConnection>(self->data_).config),
+                std::move(std::get<ControlConnection>(self->data_).config),
                 self->connection_->listener_->data_connection_listener_),
             nullptr, self->connection_->args(), nullptr);
       });
@@ -389,7 +389,7 @@ auto ChaoticGoodServerListener::ActiveConnection::HandshakingState::
                 [self]() mutable {
                   self->connection_->listener_->data_connection_listener_
                       ->FinishDataConnection(
-                          absl::get<DataConnection>(self->data_).connection_id,
+                          std::get<DataConnection>(self->data_).connection_id,
                           std::move(self->connection_->endpoint_));
                   return absl::OkStatus();
                 });
@@ -479,10 +479,10 @@ void ChaoticGoodServerListener::Orphan() {
 }  // namespace grpc_core
 
 int grpc_server_add_chaotic_good_port(grpc_server* server, const char* addr) {
-  using grpc_event_engine::experimental::EventEngine;
-  if (grpc_core::IsChaoticGoodLegacyProtocolEnabled()) {
+  if (!grpc_core::IsChaoticGoodFramingLayerEnabled()) {
     return grpc_server_add_chaotic_good_legacy_port(server, addr);
   }
+  using grpc_event_engine::experimental::EventEngine;
   grpc_core::ExecCtx exec_ctx;
   auto* const core_server = grpc_core::Server::FromC(server);
   const std::string parsed_addr = grpc_core::URI::PercentDecode(addr);
@@ -532,7 +532,7 @@ int grpc_server_add_chaotic_good_port(grpc_server* server, const char* addr) {
     auto bind_result = listener->Bind(ee_addr);
     if (!bind_result.ok()) {
       error_list.push_back(
-          std::make_pair(std::move(addr_str), bind_result.status()));
+          std::pair(std::move(addr_str), bind_result.status()));
       continue;
     }
     if (port_num == 0) {

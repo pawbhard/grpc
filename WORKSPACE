@@ -10,6 +10,8 @@ load("//bazel:grpc_extra_deps.bzl", "grpc_extra_deps")
 
 grpc_extra_deps()
 
+# RBE
+
 load("@bazel_toolchains//rules/exec_properties:exec_properties.bzl", "create_rbe_exec_properties_dict", "custom_exec_properties")
 
 custom_exec_properties(
@@ -44,7 +46,7 @@ load("@rules_python//python:pip.bzl", "pip_parse")
 
 pip_parse(
     name = "grpc_python_dependencies",
-    requirements_lock = "@com_github_grpc_grpc//:requirements.bazel.txt",
+    requirements_lock = "@com_github_grpc_grpc//:requirements.bazel.lock",
 )
 
 load("@grpc_python_dependencies//:requirements.bzl", "install_deps")
