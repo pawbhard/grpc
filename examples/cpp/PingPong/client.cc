@@ -29,11 +29,11 @@ class PingPongClient {
         grpc::Status status;
         std::condition_variable cv;
         auto start_time = absl::Now();
-        double latency= 0;
+        absl::Duration latency;//= 0;
         stub->async()->SendPing(&ctx, &request, &response,
             [&mu, &cv, &done, &status, &start_time, &latency](grpc::Status s) {
-                latency = absl::FDivDuration((absl::Now() - start_time),
-                                              absl::Microseconds(1));
+                latency = absl::Now() - start_time; //absl::FDivDuration((absl::Now() - start_time),
+                                              //absl::Microseconds(1));
                 status = std::move(s);
                 std::lock_guard<std::mutex> lock(mu);
                 done = true;
@@ -59,6 +59,7 @@ int main() {
     std::string server_addr = "0.0.0.0:50051";
     auto channel = grpc::CreateChannel(server_addr, grpc::InsecureChannelCredentials());
     PingPongClient pc(channel);
+    pc.SendPing();
     pc.SendPing();
     return 0;
 }
