@@ -199,7 +199,7 @@ class XdsMatcherList : public XdsMatcher {
         XdsMatcherList::SinglePredicate<typename InputType::ProducedType>>(
         std::move(input), std::move(matcher));
   }
-  
+
   // Alternative template specialization to return null in the case where
   // the input produces a different type than the matcher consumes.
   template <typename InputType, typename MatcherType>
