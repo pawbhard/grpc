@@ -19,8 +19,6 @@
 
 #include <memory>
 
-#include "absl/strings/match.h"
-
 #include "src/core/lib/channel/channel_args.h"
 #include "src/core/lib/experiments/experiments.h"
 #include "src/core/util/time.h"
@@ -28,6 +26,7 @@
 #include "test/core/test_util/scoped_env_var.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "absl/strings/match.h"
 
 namespace grpc_core {
 namespace {
