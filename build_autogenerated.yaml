@@ -5532,6 +5532,7 @@ libs:
 targets:
 - name: multiple_server_queues_test
   build: test
+  run: false
   language: c
   headers: []
   src:
@@ -5540,6 +5541,7 @@ targets:
   - grpc_test_util
 - name: pollset_windows_starvation_test
   build: test
+  run: false
   language: c
   headers: []
   src:
@@ -5553,6 +5555,7 @@ targets:
 - name: activity_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -5752,6 +5755,7 @@ targets:
 - name: admin_services_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/cpp/server/csds/csds.h
@@ -5901,6 +5905,7 @@ targets:
 - name: alarm_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -5916,6 +5921,7 @@ targets:
 - name: all_ok_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -6105,6 +6111,7 @@ targets:
 - name: alloc_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -6115,6 +6122,7 @@ targets:
 - name: alpn_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -6125,6 +6133,7 @@ targets:
 - name: alts_concurrent_connectivity_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/end2end/cq_verifier.h
@@ -6147,6 +6156,7 @@ targets:
 - name: alts_counter_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/tsi/alts/crypt/gsec_test_util.h
@@ -6159,6 +6169,7 @@ targets:
 - name: alts_crypt_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/tsi/alts/crypt/gsec_test_util.h
@@ -6171,6 +6182,7 @@ targets:
 - name: alts_crypter_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/tsi/alts/crypt/gsec_test_util.h
@@ -6183,6 +6195,7 @@ targets:
 - name: alts_frame_protector_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -6203,6 +6216,7 @@ targets:
 - name: alts_grpc_record_protocol_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/tsi/alts/crypt/gsec_test_util.h
@@ -6215,6 +6229,7 @@ targets:
 - name: alts_handshaker_client_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/ext/upb-gen/src/proto/grpc/gcp/altscontext.upb.h
@@ -6236,6 +6251,7 @@ targets:
 - name: alts_iovec_record_protocol_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/tsi/alts/crypt/gsec_test_util.h
@@ -6248,6 +6264,7 @@ targets:
 - name: alts_security_connector_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -6258,6 +6275,7 @@ targets:
 - name: alts_tsi_handshaker_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/tsi/alts/handshaker/alts_handshaker_service_api_test_lib.h
@@ -6270,6 +6288,7 @@ targets:
 - name: alts_tsi_utils_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/tsi/alts/handshaker/alts_handshaker_service_api_test_lib.h
@@ -6282,6 +6301,7 @@ targets:
 - name: alts_util_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -6293,6 +6313,7 @@ targets:
 - name: alts_zero_copy_grpc_protector_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/tsi/alts/crypt/gsec_test_util.h
@@ -6305,6 +6326,7 @@ targets:
 - name: arena_promise_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/promise/test_context.h
@@ -6316,6 +6338,7 @@ targets:
 - name: arena_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -6326,6 +6349,7 @@ targets:
 - name: async_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/end2end/end2end_test_utils.h
@@ -6346,6 +6370,7 @@ targets:
 - name: auth_context_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -6356,6 +6381,7 @@ targets:
 - name: auth_property_iterator_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -6366,6 +6392,7 @@ targets:
 - name: authorization_matchers_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -6376,6 +6403,7 @@ targets:
 - name: authorization_policy_provider_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -6389,6 +6417,7 @@ targets:
 - name: avl_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/util/atomic_utils.h
@@ -6405,6 +6434,7 @@ targets:
 - name: aws_request_signer_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -6415,6 +6445,7 @@ targets:
 - name: backend_metrics_lb_policy_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/cpp/server/orca/orca_service.h
@@ -6434,6 +6465,7 @@ targets:
 - name: backoff_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -6444,6 +6476,7 @@ targets:
 - name: bad_server_response_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/end2end/cq_verifier.h
@@ -6456,6 +6489,7 @@ targets:
 - name: basic_work_queue_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -6466,6 +6500,7 @@ targets:
 - name: bdp_estimator_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -6480,6 +6515,7 @@ targets:
 - name: bin_decoder_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -6490,6 +6526,7 @@ targets:
 - name: bin_encoder_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -6500,6 +6537,7 @@ targets:
 - name: bitset_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/util/bitset.h
@@ -6515,6 +6553,7 @@ targets:
 - name: blackboard_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -6695,6 +6734,7 @@ targets:
 - name: buffer_list_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -6705,6 +6745,7 @@ targets:
 - name: byte_buffer_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -6715,6 +6756,7 @@ targets:
 - name: c_slice_buffer_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -6725,6 +6767,7 @@ targets:
 - name: call_arena_allocator_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -6739,6 +6782,7 @@ targets:
 - name: call_credentials_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -6757,6 +6801,7 @@ targets:
 - name: call_creds_registry_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/test_call_creds.h
@@ -6782,6 +6827,7 @@ targets:
 - name: call_filters_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/call/call_filters.h
@@ -7038,6 +7084,7 @@ targets:
 - name: call_finalization_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/promise/test_context.h
@@ -7049,6 +7096,7 @@ targets:
 - name: call_state_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/call/call_state.h
@@ -7243,6 +7291,7 @@ targets:
 - name: call_tracer_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/fake_stats_plugin.h
@@ -7255,6 +7304,7 @@ targets:
 - name: call_utils_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/call/call_arena_allocator.h
@@ -7912,6 +7962,7 @@ targets:
 - name: cancel_ares_query_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/end2end/cq_verifier.h
@@ -7929,6 +7980,7 @@ targets:
 - name: cancel_callback_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -8147,6 +8199,7 @@ targets:
 - name: cds_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -8157,6 +8210,7 @@ targets:
 - name: cel_authorization_engine_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/ext/upb-gen/cel/expr/checked.upb.h
@@ -8457,6 +8511,7 @@ targets:
 - name: certificate_provider_registry_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -8467,6 +8522,7 @@ targets:
 - name: certificate_provider_store_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -8477,6 +8533,7 @@ targets:
 - name: cf_engine_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -8491,6 +8548,7 @@ targets:
 - name: cf_event_engine_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -8537,6 +8595,7 @@ targets:
 - name: channel_args_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -8547,6 +8606,7 @@ targets:
 - name: channel_arguments_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -8558,6 +8618,7 @@ targets:
 - name: channel_creds_registry_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - third_party/protoc-gen-validate/validate/validate.h
@@ -8644,6 +8705,7 @@ targets:
 - name: channel_init_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -8654,6 +8716,7 @@ targets:
 - name: channel_stack_builder_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -8664,6 +8727,7 @@ targets:
 - name: channel_stack_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -8674,6 +8738,7 @@ targets:
 - name: channel_trace_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/util/channel_trace_proto_helper.h
@@ -8688,6 +8753,7 @@ targets:
 - name: channelz_registry_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -8699,6 +8765,7 @@ targets:
 - name: channelz_service_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -8722,6 +8789,7 @@ targets:
 - name: channelz_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/ext/upb-gen/google/protobuf/any.upb.h
@@ -8753,6 +8821,7 @@ targets:
 - name: channelz_tool_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/zviz/data.h
@@ -8887,6 +8956,7 @@ targets:
 - name: channelz_v2_service_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -8910,6 +8980,7 @@ targets:
 - name: check_gcp_environment_linux_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -8920,6 +8991,7 @@ targets:
 - name: check_gcp_environment_windows_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -8930,6 +9002,7 @@ targets:
 - name: chttp2_server_listener_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/end2end/cq_verifier.h
@@ -8942,6 +9015,7 @@ targets:
 - name: chunked_vector_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -9160,6 +9234,7 @@ targets:
 - name: cli_call_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/util/cli_call.h
@@ -9196,6 +9271,7 @@ targets:
 - name: client_auth_filter_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -9214,6 +9290,7 @@ targets:
 - name: client_authority_filter_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -9232,6 +9309,7 @@ targets:
 - name: client_callback_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/end2end/end2end_test_utils.h
@@ -9254,6 +9332,7 @@ targets:
 - name: client_channel_service_config_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/scoped_env_var.h
@@ -9265,6 +9344,7 @@ targets:
 - name: client_context_test_peer_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -9275,6 +9355,7 @@ targets:
 - name: client_fork_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -9299,6 +9380,7 @@ targets:
 - name: client_interceptors_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/end2end/end2end_test_utils.h
@@ -9321,6 +9403,7 @@ targets:
 - name: client_lb_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/cpp/server/orca/orca_service.h
@@ -9361,6 +9444,7 @@ targets:
 - name: client_ssl_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -9375,6 +9459,7 @@ targets:
 - name: client_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/cpp/latent_see/latent_see_client.h
@@ -9397,6 +9482,7 @@ targets:
 - name: cmdline_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -9407,6 +9493,7 @@ targets:
 - name: codegen_test_full
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -9418,6 +9505,7 @@ targets:
 - name: codegen_test_minimal
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -9429,6 +9517,7 @@ targets:
 - name: combiner_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -9443,6 +9532,7 @@ targets:
 - name: common_closures_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/lib/event_engine/common_closures.h
@@ -9458,6 +9548,7 @@ targets:
 - name: completion_queue_threading_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -9468,6 +9559,7 @@ targets:
 - name: composite_credentials_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/test_call_creds.h
@@ -9480,6 +9572,7 @@ targets:
 - name: compression_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -9490,6 +9583,7 @@ targets:
 - name: concurrent_connectivity_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -9500,6 +9594,7 @@ targets:
 - name: connection_context_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -9510,6 +9605,7 @@ targets:
 - name: connection_refused_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/end2end/cq_verifier.h
@@ -9522,6 +9618,7 @@ targets:
 - name: connectivity_state_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -9532,6 +9629,7 @@ targets:
 - name: context_allocator_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/end2end/test_service_impl.h
@@ -9551,6 +9649,7 @@ targets:
 - name: context_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -9727,6 +9826,7 @@ targets:
 - name: core_configuration_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -9737,6 +9837,7 @@ targets:
 - name: cpp_impl_of_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/util/cpp_impl_of.h
@@ -9747,6 +9848,7 @@ targets:
 - name: cpu_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -9757,6 +9859,7 @@ targets:
 - name: crl_provider_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/end2end/test_service_impl.h
@@ -9776,6 +9879,7 @@ targets:
 - name: crl_ssl_transport_security_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -9798,6 +9902,7 @@ targets:
 - name: default_engine_methods_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/mock_event_engine.h
@@ -9809,6 +9914,7 @@ targets:
 - name: delegating_channel_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/end2end/test_service_impl.h
@@ -9828,6 +9934,7 @@ targets:
 - name: directory_reader_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -9838,6 +9945,7 @@ targets:
 - name: dns_fork_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/posix/dns_server.h
@@ -9855,6 +9963,7 @@ targets:
 - name: dns_resolver_cooldown_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -9865,6 +9974,7 @@ targets:
 - name: dns_resolver_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -9875,6 +9985,7 @@ targets:
 - name: down_cast_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/util/down_cast.h
@@ -9886,6 +9997,7 @@ targets:
 - name: dual_ref_counted_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -9896,6 +10008,7 @@ targets:
 - name: dualstack_socket_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/end2end/cq_verifier.h
@@ -9912,6 +10025,7 @@ targets:
 - name: dump_args_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/util/dump_args.h
@@ -9926,6 +10040,7 @@ targets:
 - name: end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/end2end/end2end_test_utils.h
@@ -9949,6 +10064,7 @@ targets:
 - name: endpoint_addresses_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -9959,6 +10075,7 @@ targets:
 - name: endpoint_config_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/property_list.h
@@ -10028,6 +10145,7 @@ targets:
 - name: endpoint_pair_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/iomgr/endpoint_tests.h
@@ -10040,6 +10158,7 @@ targets:
 - name: env_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -10050,6 +10169,7 @@ targets:
 - name: error_details_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -10066,6 +10186,7 @@ targets:
 - name: error_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/iomgr/endpoint_tests.h
@@ -10078,6 +10199,7 @@ targets:
 - name: error_utils_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -10088,6 +10210,7 @@ targets:
 - name: errqueue_support_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -10101,6 +10224,7 @@ targets:
 - name: evaluate_args_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -10111,6 +10235,7 @@ targets:
 - name: event_engine_wakeup_scheduler_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/lib/promise/event_engine_wakeup_scheduler.h
@@ -10122,6 +10247,7 @@ targets:
 - name: event_poller_posix_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/posix/posix_engine_test_utils.h
@@ -10138,6 +10264,7 @@ targets:
 - name: examine_stack_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -10152,6 +10279,7 @@ targets:
 - name: exception_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -10169,6 +10297,7 @@ targets:
 - name: exec_ctx_wakeup_scheduler_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -10360,6 +10489,7 @@ targets:
 - name: experiments_tag_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/lib/experiments/config.h
@@ -10377,6 +10507,7 @@ targets:
 - name: experiments_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/lib/experiments/config.h
@@ -10393,6 +10524,7 @@ targets:
 - name: factory_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/mock_event_engine.h
@@ -10405,6 +10537,7 @@ targets:
 - name: fake_resolver_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -10415,6 +10548,7 @@ targets:
 - name: fake_transport_security_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -10433,6 +10567,7 @@ targets:
 - name: fd_posix_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -10447,6 +10582,7 @@ targets:
 - name: file_descriptor_collection_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -10461,6 +10597,7 @@ targets:
 - name: file_watcher_certificate_provider_factory_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/scoped_env_var.h
@@ -10472,6 +10609,7 @@ targets:
 - name: filter_fusion_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/call/call_arena_allocator.h
@@ -11130,6 +11268,7 @@ targets:
 - name: filter_test_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -11169,6 +11308,7 @@ targets:
 - name: flow_control_manager_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/call/message.h
@@ -11399,6 +11539,7 @@ targets:
 - name: flow_control_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/call/message.h
@@ -11628,6 +11769,7 @@ targets:
 - name: for_each_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -11855,6 +11997,7 @@ targets:
 - name: fork_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -11869,6 +12012,7 @@ targets:
 - name: format_request_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/end2end/data/ssl_test_data.h
@@ -11884,6 +12028,7 @@ targets:
 - name: frame_handler_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/tsi/alts/crypt/gsec_test_util.h
@@ -11896,6 +12041,7 @@ targets:
 - name: frame_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/call/message.h
@@ -12119,6 +12265,7 @@ targets:
 - name: function_signature_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/util/function_signature.h
@@ -12130,6 +12277,7 @@ targets:
 - name: fuzzing_event_engine_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -12158,6 +12306,7 @@ targets:
 - name: fuzzing_event_engine_unittest
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -12174,6 +12323,7 @@ targets:
 - name: gcp_authentication_filter_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -12192,6 +12342,7 @@ targets:
 - name: generic_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/end2end/end2end_test_utils.h
@@ -12211,6 +12362,7 @@ targets:
 - name: glob_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -12221,6 +12373,7 @@ targets:
 - name: goaway_server_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/end2end/cq_verifier.h
@@ -12234,6 +12387,7 @@ targets:
 - name: google_c2p_resolver_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/fake_udp_and_tcp_server.h
@@ -12246,6 +12400,7 @@ targets:
 - name: google_default_call_credentials_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/test_call_creds.h
@@ -12258,6 +12413,7 @@ targets:
 - name: gpr_time_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -12268,6 +12424,7 @@ targets:
 - name: graceful_shutdown_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/end2end/cq_verifier.h
@@ -12280,6 +12437,7 @@ targets:
 - name: grpc_alts_credentials_options_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -12290,6 +12448,7 @@ targets:
 - name: grpc_audit_logging_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -12300,6 +12459,7 @@ targets:
 - name: grpc_authorization_engine_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/audit_logging_utils.h
@@ -12312,6 +12472,7 @@ targets:
 - name: grpc_authorization_policy_provider_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -12323,6 +12484,7 @@ targets:
 - name: grpc_authz_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/audit_logging_utils.h
@@ -12346,6 +12508,7 @@ targets:
 - name: grpc_byte_buffer_reader_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -12385,6 +12548,7 @@ targets:
 - name: grpc_completion_queue_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -12411,6 +12575,7 @@ targets:
 - name: grpc_ipv6_loopback_available_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -12461,6 +12626,7 @@ targets:
 - name: grpc_text_map_carrier_test
   gtest: true
   build: plugin_test
+  run: false
   language: c++
   plugin_option: gRPC_BUILD_GRPCPP_OTEL_PLUGIN
   headers:
@@ -12482,6 +12648,7 @@ targets:
 - name: grpc_tls_certificate_distributor_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -12492,6 +12659,7 @@ targets:
 - name: grpc_tls_certificate_provider_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -12502,6 +12670,7 @@ targets:
 - name: grpc_tls_certificate_verifier_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -12512,6 +12681,7 @@ targets:
 - name: grpc_tls_credentials_options_comparator_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -12522,6 +12692,7 @@ targets:
 - name: grpc_tls_credentials_options_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -12532,6 +12703,7 @@ targets:
 - name: grpc_tls_crl_provider_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -12551,6 +12723,7 @@ targets:
 - name: grpc_tool_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/util/cli_call.h
@@ -12591,6 +12764,7 @@ targets:
 - name: grpc_trace_bin_text_map_propagator_test
   gtest: true
   build: plugin_test
+  run: false
   language: c++
   plugin_option: gRPC_BUILD_GRPCPP_OTEL_PLUGIN
   headers:
@@ -12612,6 +12786,7 @@ targets:
 - name: grpclb_api_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -12623,6 +12798,7 @@ targets:
 - name: grpclb_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/test_call_creds.h
@@ -12653,6 +12829,7 @@ targets:
 - name: h2_ssl_cert_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/ext/transport/chaotic_good/client/chaotic_good_connector.h
@@ -12766,6 +12943,7 @@ targets:
 - name: h2_ssl_session_reuse_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/end2end/cq_verifier.h
@@ -12778,6 +12956,7 @@ targets:
 - name: h2_tls_peer_property_external_verifier_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/end2end/cq_verifier.h
@@ -12790,6 +12969,7 @@ targets:
 - name: handle_tests
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -12800,6 +12980,7 @@ targets:
 - name: handshake_server_with_readahead_handshaker_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/handshake/server_ssl_common.h
@@ -12816,6 +12997,7 @@ targets:
 - name: header_assembler_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -12836,6 +13018,7 @@ targets:
 - name: health_service_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/end2end/test_health_check_service_impl.h
@@ -12859,6 +13042,7 @@ targets:
 - name: histogram_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -12869,6 +13053,7 @@ targets:
 - name: host_port_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -12879,6 +13064,7 @@ targets:
 - name: hpack_encoder_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/transport/chttp2/hpack_encoder_test_helper.h
@@ -12890,6 +13076,7 @@ targets:
 - name: hpack_parser_table_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -12900,6 +13087,7 @@ targets:
 - name: hpack_parser_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -12924,6 +13112,7 @@ targets:
 - name: http2_client_transport_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -12947,6 +13136,7 @@ targets:
 - name: http2_security_frame_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -12968,6 +13158,7 @@ targets:
 - name: http2_server_transport_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/ext/transport/chttp2/transport/http2_server_transport.h
@@ -12997,6 +13188,7 @@ targets:
 - name: http2_settings_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -13007,6 +13199,7 @@ targets:
 - name: http2_status_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -13027,6 +13220,7 @@ targets:
 - name: http2_transport_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -13049,6 +13243,7 @@ targets:
 - name: http_proxy_mapper_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/scoped_env_var.h
@@ -13060,6 +13255,7 @@ targets:
 - name: httpcli_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/fake_udp_and_tcp_server.h
@@ -13078,6 +13274,7 @@ targets:
 - name: httpscli_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/fake_udp_and_tcp_server.h
@@ -13096,6 +13293,7 @@ targets:
 - name: hybrid_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/end2end/end2end_test_utils.h
@@ -13117,6 +13315,7 @@ targets:
 - name: idle_filter_state_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/ext/filters/channel_idle/idle_filter_state.h
@@ -13130,6 +13329,7 @@ targets:
 - name: if_list_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/util/if_list.h
@@ -13142,6 +13342,7 @@ targets:
 - name: if_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -13327,6 +13528,7 @@ targets:
 - name: incoming_metadata_tracker_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -13349,6 +13551,7 @@ targets:
 - name: info_tool_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/call/call_arena_allocator.h
@@ -14017,6 +14220,7 @@ targets:
 - name: init_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -14027,6 +14231,7 @@ targets:
 - name: insecure_credentials_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -14037,6 +14242,7 @@ targets:
 - name: insecure_security_connector_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -14047,6 +14253,7 @@ targets:
 - name: instrument_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -14058,6 +14265,7 @@ targets:
 - name: inter_activity_latch_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/lib/promise/event_engine_wakeup_scheduler.h
@@ -14069,6 +14277,7 @@ targets:
 - name: inter_activity_mutex_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/promise/poll_matcher.h
@@ -14081,6 +14290,7 @@ targets:
 - name: inter_activity_pipe_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -14276,6 +14486,7 @@ targets:
 - name: interception_chain_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/promise/poll_matcher.h
@@ -14287,6 +14498,7 @@ targets:
 - name: interceptor_list_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -14545,6 +14757,7 @@ targets:
 - name: invalid_call_argument_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/end2end/cq_verifier.h
@@ -14557,6 +14770,7 @@ targets:
 - name: iocp_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/windows/create_sockpair.h
@@ -14573,6 +14787,7 @@ targets:
 - name: istio_echo_server_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/interop/istio_echo_server_lib.h
@@ -14588,6 +14803,7 @@ targets:
 - name: join_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -14778,6 +14994,7 @@ targets:
 - name: json_object_loader_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -14788,6 +15005,7 @@ targets:
 - name: json_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -14798,6 +15016,7 @@ targets:
 - name: json_token_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -14808,6 +15027,7 @@ targets:
 - name: jwt_util_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -14818,6 +15038,7 @@ targets:
 - name: jwt_verifier_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -14828,6 +15049,7 @@ targets:
 - name: lame_client_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/end2end/cq_verifier.h
@@ -14840,6 +15062,7 @@ targets:
 - name: latch_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -15038,6 +15261,7 @@ targets:
 - name: latent_see_service_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/ext/upb-gen/google/protobuf/any.upb.h
@@ -15069,6 +15293,7 @@ targets:
 - name: latent_see_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/call/message.h
@@ -15295,6 +15520,7 @@ targets:
 - name: latent_see_tool_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/ext/transport/chaotic_good/chaotic_good.h
@@ -15427,6 +15653,7 @@ targets:
 - name: layout_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/zviz/environment.h
@@ -15446,6 +15673,7 @@ targets:
 - name: lb_get_cpu_stats_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/cpp/server/load_reporter/get_cpu_stats.h
@@ -15461,6 +15689,7 @@ targets:
 - name: lb_load_data_store_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/cpp/server/load_reporter/constants.h
@@ -15475,6 +15704,7 @@ targets:
 - name: lb_metadata_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -15485,6 +15715,7 @@ targets:
 - name: load_config_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -15495,6 +15726,7 @@ targets:
 - name: load_file_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -15505,6 +15737,7 @@ targets:
 - name: local_security_connector_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -15515,6 +15748,7 @@ targets:
 - name: lock_based_mpsc_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -15710,6 +15944,7 @@ targets:
 - name: log_too_many_open_files_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -15724,6 +15959,7 @@ targets:
 - name: loop_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -15918,6 +16154,7 @@ targets:
 - name: lru_cache_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -16094,6 +16331,7 @@ targets:
 - name: map_pipe_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -16321,6 +16559,7 @@ targets:
 - name: match_promise_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -16508,6 +16747,7 @@ targets:
 - name: match_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/util/match.h
@@ -16521,6 +16761,7 @@ targets:
 - name: matchers_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -16531,6 +16772,7 @@ targets:
 - name: memory_quota_stress_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -16544,6 +16786,7 @@ targets:
 - name: memory_quota_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/resource_quota/call_checker.h
@@ -16555,6 +16798,7 @@ targets:
 - name: memory_usage_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/lib/debug/trace.h
@@ -16590,6 +16834,7 @@ targets:
 - name: message_allocator_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/end2end/test_service_impl.h
@@ -16609,6 +16854,7 @@ targets:
 - name: message_assembler_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -16629,6 +16875,7 @@ targets:
 - name: message_compress_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -16639,6 +16886,7 @@ targets:
 - name: message_size_service_config_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -16649,6 +16897,7 @@ targets:
 - name: metadata_map_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -16659,6 +16908,7 @@ targets:
 - name: metrics_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/fake_stats_plugin.h
@@ -16671,6 +16921,7 @@ targets:
 - name: minimal_stack_is_minimal_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -16681,6 +16932,7 @@ targets:
 - name: miscompile_with_no_unique_address_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -16692,6 +16944,7 @@ targets:
 - name: mock_stream_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -16709,6 +16962,7 @@ targets:
 - name: mock_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/end2end/end2end_test_utils.h
@@ -16728,6 +16982,7 @@ targets:
 - name: mpscq_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -16742,6 +16997,7 @@ targets:
 - name: no_destruct_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/util/construct_destruct.h
@@ -16755,6 +17011,7 @@ targets:
 - name: no_server_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/end2end/cq_verifier.h
@@ -16767,6 +17024,7 @@ targets:
 - name: nonblocking_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -16784,6 +17042,7 @@ targets:
 - name: notification_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/util/notification.h
@@ -16795,6 +17054,7 @@ targets:
 - name: num_external_connectivity_watchers_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -16805,6 +17065,7 @@ targets:
 - name: observable_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -17002,6 +17263,7 @@ targets:
 - name: oracle_event_engine_posix_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -17026,6 +17288,7 @@ targets:
 - name: orca_service_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/cpp/server/orca/orca_service.h
@@ -17044,6 +17307,7 @@ targets:
 - name: orca_service_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/cpp/server/orca/orca_service.h
@@ -17056,6 +17320,7 @@ targets:
 - name: orphanable_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -17066,6 +17331,7 @@ targets:
 - name: osa_distance_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/osa_distance.h
@@ -17077,6 +17343,7 @@ targets:
 - name: otel_npc_metrics_test
   gtest: true
   build: plugin_test
+  run: false
   language: c++
   plugin_option: gRPC_BUILD_GRPCPP_OTEL_PLUGIN
   headers:
@@ -17111,6 +17378,7 @@ targets:
 - name: otel_plugin_option_test
   gtest: true
   build: plugin_test
+  run: false
   language: c++
   plugin_option: gRPC_BUILD_GRPCPP_OTEL_PLUGIN
   headers:
@@ -17145,6 +17413,7 @@ targets:
 - name: otel_plugin_test
   gtest: true
   build: plugin_test
+  run: false
   language: c++
   plugin_option: gRPC_BUILD_GRPCPP_OTEL_PLUGIN
   headers:
@@ -17181,6 +17450,7 @@ targets:
 - name: otel_tracing_test
   gtest: true
   build: plugin_test
+  run: false
   language: c++
   plugin_option: gRPC_BUILD_GRPCPP_OTEL_PLUGIN
   headers:
@@ -17219,6 +17489,7 @@ targets:
 - name: outlier_detection_lb_config_parser_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/scoped_env_var.h
@@ -17230,6 +17501,7 @@ targets:
 - name: outlier_detection_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -17247,6 +17519,7 @@ targets:
 - name: overload_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/util/overload.h
@@ -17259,6 +17532,7 @@ targets:
 - name: parse_address_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -17269,6 +17543,7 @@ targets:
 - name: parse_address_with_named_scope_id_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -17283,6 +17558,7 @@ targets:
 - name: parsed_metadata_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -17293,6 +17569,7 @@ targets:
 - name: parser_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/end2end/data/ssl_test_data.h
@@ -17308,6 +17585,7 @@ targets:
 - name: party_mpsc_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/promise/poll_matcher.h
@@ -17323,6 +17601,7 @@ targets:
 - name: party_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -17333,6 +17612,7 @@ targets:
 - name: percent_encoding_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -17343,6 +17623,7 @@ targets:
 - name: periodic_update_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/property_list.h
@@ -17449,6 +17730,7 @@ targets:
 - name: pick_first_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -17469,6 +17751,7 @@ targets:
 - name: ping_abuse_policy_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -17479,6 +17762,7 @@ targets:
 - name: ping_callbacks_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/mock_event_engine.h
@@ -17490,6 +17774,7 @@ targets:
 - name: ping_configuration_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -17500,6 +17785,7 @@ targets:
 - name: ping_rate_policy_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -17510,6 +17796,7 @@ targets:
 - name: pipe_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/lib/promise/join.h
@@ -17522,6 +17809,7 @@ targets:
 - name: poll_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -17698,6 +17986,7 @@ targets:
 - name: poller_fork_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -17717,6 +18006,7 @@ targets:
 - name: port_sharing_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/end2end/test_service_impl.h
@@ -17736,6 +18026,7 @@ targets:
 - name: posix_endpoint_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -17759,6 +18050,7 @@ targets:
 - name: posix_engine_listener_utils_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -17773,6 +18065,7 @@ targets:
 - name: posix_event_engine_connect_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -17792,6 +18085,7 @@ targets:
 - name: posix_event_engine_native_dns_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -17819,6 +18113,7 @@ targets:
 - name: posix_event_engine_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -17853,6 +18148,7 @@ targets:
 - name: posix_write_event_sink_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -17867,6 +18163,7 @@ targets:
 - name: pre_stop_hook_server_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/cpp/server/csds/csds.h
@@ -18028,6 +18325,7 @@ targets:
 - name: prioritized_race_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -18211,6 +18509,7 @@ targets:
 - name: private_key_offload_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -18229,6 +18528,7 @@ targets:
 - name: promise_endpoint_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/lib/promise/join.h
@@ -18241,6 +18541,7 @@ targets:
 - name: promise_factory_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -18425,6 +18726,7 @@ targets:
 - name: promise_map_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -18610,6 +18912,7 @@ targets:
 - name: promise_mutex_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -18808,6 +19111,7 @@ targets:
 - name: promise_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -18991,6 +19295,7 @@ targets:
 - name: property_list_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/property_list.h
@@ -19046,6 +19351,7 @@ targets:
 - name: proto_buffer_reader_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -19056,6 +19362,7 @@ targets:
 - name: proto_buffer_writer_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -19066,6 +19373,7 @@ targets:
 - name: proto_server_reflection_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/end2end/end2end_test_utils.h
@@ -19090,6 +19398,7 @@ targets:
 - name: proto_utils_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -19346,6 +19655,7 @@ targets:
 - name: query_extensions_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -19531,6 +19841,7 @@ targets:
 - name: race_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -19711,6 +20022,7 @@ targets:
 - name: random_early_detection_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/util/random_early_detection.h
@@ -19727,6 +20039,7 @@ targets:
 - name: raw_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/end2end/end2end_test_utils.h
@@ -19748,6 +20061,7 @@ targets:
 - name: rbac_service_config_parser_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -19758,6 +20072,7 @@ targets:
 - name: rbac_translator_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -19769,6 +20084,7 @@ targets:
 - name: ref_counted_ptr_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -19779,6 +20095,7 @@ targets:
 - name: ref_counted_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -19789,6 +20106,7 @@ targets:
 - name: remove_stream_from_stalled_lists_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -19803,6 +20121,7 @@ targets:
 - name: request_buffer_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/call/call_arena_allocator.h
@@ -20071,6 +20390,7 @@ targets:
 - name: resolve_address_using_ares_resolver_posix_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -20085,6 +20405,7 @@ targets:
 - name: resolve_address_using_ares_resolver_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/fake_udp_and_tcp_server.h
@@ -20098,6 +20419,7 @@ targets:
 - name: resolve_address_using_native_resolver_posix_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -20112,6 +20434,7 @@ targets:
 - name: resolve_address_using_native_resolver_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/fake_udp_and_tcp_server.h
@@ -20125,6 +20448,7 @@ targets:
 - name: resource_quota_end2end_stress_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -20142,6 +20466,7 @@ targets:
 - name: resource_quota_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -20152,6 +20477,7 @@ targets:
 - name: resource_tracker_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/lib/resource_tracker/resource_tracker.h
@@ -20167,6 +20493,7 @@ targets:
 - name: retry_service_config_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -20177,6 +20504,7 @@ targets:
 - name: retry_throttle_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -20187,6 +20515,7 @@ targets:
 - name: ring_buffer_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/util/ring_buffer.h
@@ -20199,6 +20528,7 @@ targets:
 - name: ring_hash_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -20217,6 +20547,7 @@ targets:
 - name: rls_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -20250,6 +20581,7 @@ targets:
 - name: rls_lb_config_parser_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -20260,6 +20592,7 @@ targets:
 - name: round_robin_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -20277,6 +20610,7 @@ targets:
 - name: secure_auth_context_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -20287,6 +20621,7 @@ targets:
 - name: secure_channel_create_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -20297,6 +20632,7 @@ targets:
 - name: secure_endpoint_read_coalescing_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/test_memory_allocator.h
@@ -20308,6 +20644,7 @@ targets:
 - name: secure_endpoint_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/iomgr/endpoint_tests.h
@@ -20320,6 +20657,7 @@ targets:
 - name: security_connector_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -20330,6 +20668,7 @@ targets:
 - name: seq_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -20517,6 +20856,7 @@ targets:
 - name: sequential_connectivity_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -20527,6 +20867,7 @@ targets:
 - name: server_builder_plugin_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/end2end/test_service_impl.h
@@ -20547,6 +20888,7 @@ targets:
 - name: server_builder_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -20571,6 +20913,7 @@ targets:
 - name: server_builder_with_socket_mutator_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -20593,6 +20936,7 @@ targets:
 - name: server_call_tracer_factory_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -20603,6 +20947,7 @@ targets:
 - name: server_chttp2_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -20613,6 +20958,7 @@ targets:
 - name: server_config_selector_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -20623,6 +20969,7 @@ targets:
 - name: server_context_test_spouse_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -20633,6 +20980,7 @@ targets:
 - name: server_early_return_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/end2end/end2end_test_utils.h
@@ -20651,6 +20999,7 @@ targets:
 - name: server_interceptors_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/end2end/end2end_test_utils.h
@@ -20673,6 +21022,7 @@ targets:
 - name: server_request_call_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -20695,6 +21045,7 @@ targets:
 - name: server_ssl_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/handshake/server_ssl_common.h
@@ -20711,6 +21062,7 @@ targets:
 - name: server_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -20721,6 +21073,7 @@ targets:
 - name: service_config_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/end2end/test_service_impl.h
@@ -20741,6 +21094,7 @@ targets:
 - name: service_config_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -20751,6 +21105,7 @@ targets:
 - name: settings_timeout_manager_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -20773,6 +21128,7 @@ targets:
 - name: settings_timeout_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -20783,6 +21139,7 @@ targets:
 - name: shared_bit_gen_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/util/shared_bit_gen.h
@@ -20796,6 +21153,7 @@ targets:
 - name: shutdown_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -20814,6 +21172,7 @@ targets:
 - name: single_set_ptr_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/util/atomic_utils.h
@@ -20831,6 +21190,7 @@ targets:
 - name: sleep_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/mock_event_engine.h
@@ -20843,6 +21203,7 @@ targets:
 - name: slice_string_helpers_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/lib/debug/trace.h
@@ -20868,6 +21229,7 @@ targets:
 - name: sockaddr_resolver_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -20878,6 +21240,7 @@ targets:
 - name: sockaddr_utils_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -20888,6 +21251,7 @@ targets:
 - name: socket_utils_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -20902,6 +21266,7 @@ targets:
 - name: sorted_pack_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/util/sorted_pack.h
@@ -20915,6 +21280,7 @@ targets:
 - name: spiffe_bundle_map_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/end2end/test_service_impl.h
@@ -20934,6 +21300,7 @@ targets:
 - name: spiffe_ssl_transport_security_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -20956,6 +21323,7 @@ targets:
 - name: spiffe_utils_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -20966,6 +21334,7 @@ targets:
 - name: spinlock_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -20976,6 +21345,7 @@ targets:
 - name: ssl_transport_security_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -20998,6 +21368,7 @@ targets:
 - name: ssl_transport_security_utils_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -21020,6 +21391,7 @@ targets:
 - name: stack_tracer_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -21034,6 +21406,7 @@ targets:
 - name: stat_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -21044,6 +21417,7 @@ targets:
 - name: static_stride_scheduler_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -21221,6 +21595,7 @@ targets:
 - name: status_conversion_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -21231,6 +21606,7 @@ targets:
 - name: status_flag_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -21408,6 +21784,7 @@ targets:
 - name: status_helper_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -21418,6 +21795,7 @@ targets:
 - name: status_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -21438,6 +21816,7 @@ targets:
 - name: status_util_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -21448,6 +21827,7 @@ targets:
 - name: stream_data_queue_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -21468,6 +21848,7 @@ targets:
 - name: stream_leak_with_queued_flow_control_update_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -21478,6 +21859,7 @@ targets:
 - name: stream_quota_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/lib/resource_quota/periodic_update.h
@@ -21505,6 +21887,7 @@ targets:
 - name: stream_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -21515,6 +21898,7 @@ targets:
 - name: streaming_throughput_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/end2end/end2end_test_utils.h
@@ -21538,6 +21922,7 @@ targets:
 - name: streams_not_seen_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/end2end/cq_verifier.h
@@ -21550,6 +21935,7 @@ targets:
 - name: string_ref_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -21561,6 +21947,7 @@ targets:
 - name: string_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -21571,6 +21958,7 @@ targets:
 - name: subchannel_args_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -21581,6 +21969,7 @@ targets:
 - name: subchannel_stream_limiter_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -21591,6 +21980,7 @@ targets:
 - name: switch_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -21778,6 +22168,7 @@ targets:
 - name: sync_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -21788,6 +22179,7 @@ targets:
 - name: system_roots_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -21798,6 +22190,7 @@ targets:
 - name: table_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/util/bitset.h
@@ -21816,6 +22209,7 @@ targets:
 - name: tcp_client_posix_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -21830,6 +22224,7 @@ targets:
 - name: tcp_posix_socket_utils_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -21844,6 +22239,7 @@ targets:
 - name: tcp_posix_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/iomgr/endpoint_tests.h
@@ -21859,6 +22255,7 @@ targets:
 - name: tcp_server_posix_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -21873,6 +22270,7 @@ targets:
 - name: tcp_socket_utils_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -21883,6 +22281,7 @@ targets:
 - name: test_core_credentials_transport_ssl_ssl_credentials_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -21893,6 +22292,7 @@ targets:
 - name: test_core_credentials_transport_tls_tls_credentials_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -21903,6 +22303,7 @@ targets:
 - name: test_core_event_engine_posix_fd_conservation_posix_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -21917,6 +22318,7 @@ targets:
 - name: test_core_event_engine_posix_timer_heap_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -22098,6 +22500,7 @@ targets:
 - name: test_core_event_engine_slice_buffer_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -22282,6 +22685,7 @@ targets:
 - name: test_core_iomgr_fd_conservation_posix_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -22296,6 +22700,7 @@ targets:
 - name: test_core_iomgr_timer_heap_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -22306,6 +22711,7 @@ targets:
 - name: test_core_slice_slice_buffer_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -22316,6 +22722,7 @@ targets:
 - name: test_core_slice_slice_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/build.h
@@ -22328,6 +22735,7 @@ targets:
 - name: test_core_util_time_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/util/time.h
@@ -22343,6 +22751,7 @@ targets:
 - name: test_cpp_client_credentials_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/util/tls_test_utils.h
@@ -22356,6 +22765,7 @@ targets:
 - name: test_cpp_end2end_ssl_credentials_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/postmortem.h
@@ -22376,6 +22786,7 @@ targets:
 - name: test_cpp_end2end_tls_credentials_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/end2end/test_service_impl.h
@@ -22395,6 +22806,7 @@ targets:
 - name: test_cpp_server_credentials_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/util/tls_test_utils.h
@@ -22408,6 +22820,7 @@ targets:
 - name: test_cpp_util_slice_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -22418,6 +22831,7 @@ targets:
 - name: test_cpp_util_time_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -22429,6 +22843,7 @@ targets:
 - name: test_timeout_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/test_timeout.h
@@ -22440,6 +22855,7 @@ targets:
 - name: thd_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -22450,6 +22866,7 @@ targets:
 - name: thread_manager_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -22461,6 +22878,7 @@ targets:
 - name: thread_pool_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -22472,6 +22890,7 @@ targets:
 - name: thread_quota_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -22649,6 +23068,7 @@ targets:
 - name: thread_stress_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -22671,6 +23091,7 @@ targets:
 - name: thready_posix_event_engine_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -22714,6 +23135,7 @@ targets:
 - name: time_util_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -22724,6 +23146,7 @@ targets:
 - name: timeout_encoding_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -22734,6 +23157,7 @@ targets:
 - name: timer_list_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/lib/event_engine/posix_engine/timer.h
@@ -22755,6 +23179,7 @@ targets:
 - name: timer_manager_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -22765,6 +23190,7 @@ targets:
 - name: timer_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -22776,6 +23202,7 @@ targets:
 - name: tls_certificate_verifier_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/util/tls_test_utils.h
@@ -22789,6 +23216,7 @@ targets:
 - name: tls_key_export_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -22806,6 +23234,7 @@ targets:
 - name: tls_private_key_signer_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/end2end/test_service_impl.h
@@ -22825,6 +23254,7 @@ targets:
 - name: tls_security_connector_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/test_call_creds.h
@@ -22837,6 +23267,7 @@ targets:
 - name: too_many_pings_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/end2end/cq_verifier.h
@@ -22850,6 +23281,7 @@ targets:
 - name: tool_test_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/call/call_arena_allocator.h
@@ -23516,6 +23948,7 @@ targets:
 - name: trace_flags_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -23526,6 +23959,7 @@ targets:
 - name: traced_buffer_list_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -23540,6 +23974,7 @@ targets:
 - name: transport_security_common_api_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -23550,6 +23985,7 @@ targets:
 - name: transport_security_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -23560,6 +23996,7 @@ targets:
 - name: trie_lookup_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/util/trie_lookup.h
@@ -23571,6 +24008,7 @@ targets:
 - name: try_join_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -23758,6 +24196,7 @@ targets:
 - name: try_seq_metadata_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -23768,6 +24207,7 @@ targets:
 - name: try_seq_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -23958,6 +24398,7 @@ targets:
 - name: unique_ptr_with_bitset_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -24134,6 +24575,7 @@ targets:
 - name: unique_type_name_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/util/unique_type_name.h
@@ -24151,6 +24593,7 @@ targets:
 - name: uri_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -24161,6 +24604,7 @@ targets:
 - name: useful_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/util/useful.h
@@ -24175,6 +24619,7 @@ targets:
 - name: uuid_v4_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -24185,6 +24630,7 @@ targets:
 - name: validation_errors_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -24195,6 +24641,7 @@ targets:
 - name: varint_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -24205,6 +24652,7 @@ targets:
 - name: wait_for_callback_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -24398,6 +24846,7 @@ targets:
 - name: wait_for_single_owner_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -24408,6 +24857,7 @@ targets:
 - name: wakeup_fd_posix_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -24422,6 +24872,7 @@ targets:
 - name: weighted_round_robin_config_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/fake_stats_plugin.h
@@ -24434,6 +24885,7 @@ targets:
 - name: weighted_round_robin_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -24453,6 +24905,7 @@ targets:
 - name: win_socket_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/windows/create_sockpair.h
@@ -24469,6 +24922,7 @@ targets:
 - name: windows_endpoint_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/windows/create_sockpair.h
@@ -24485,6 +24939,7 @@ targets:
 - name: work_serializer_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -24501,6 +24956,7 @@ targets:
 - name: writable_streams_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/lib/promise/join.h
@@ -24519,6 +24975,7 @@ targets:
 - name: write_cycle_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -24529,6 +24986,7 @@ targets:
 - name: write_size_policy_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/channelz/channel_trace.h
@@ -24706,6 +25164,7 @@ targets:
 - name: writes_per_rpc_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -24733,6 +25192,7 @@ targets:
 - name: xds_audit_logger_registry_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/util/cli_call.h
@@ -24851,6 +25311,7 @@ targets:
 - name: xds_bootstrap_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/scoped_env_var.h
@@ -24862,6 +25323,7 @@ targets:
 - name: xds_certificate_provider_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -24873,6 +25335,7 @@ targets:
 - name: xds_client_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -25037,6 +25500,7 @@ targets:
 - name: xds_cluster_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/fake_stats_plugin.h
@@ -25192,6 +25656,7 @@ targets:
 - name: xds_cluster_resource_type_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/scoped_env_var.h
@@ -25334,6 +25799,7 @@ targets:
 - name: xds_cluster_type_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/scoped_env_var.h
@@ -25488,6 +25954,7 @@ targets:
 - name: xds_common_types_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/ext/upb-gen/envoy/annotations/deprecation.upb.h
@@ -25831,6 +26298,7 @@ targets:
 - name: xds_composite_filter_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/scoped_env_var.h
@@ -25988,6 +26456,7 @@ targets:
 - name: xds_core_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/fake_stats_plugin.h
@@ -26141,6 +26610,7 @@ targets:
 - name: xds_credentials_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/end2end/test_service_impl.h
@@ -26160,6 +26630,7 @@ targets:
 - name: xds_credentials_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -26170,6 +26641,7 @@ targets:
 - name: xds_csds_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/cpp/server/csds/csds.h
@@ -26345,6 +26817,7 @@ targets:
 - name: xds_enabled_server_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/scoped_env_var.h
@@ -26496,6 +26969,7 @@ targets:
 - name: xds_endpoint_resource_type_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/scoped_env_var.h
@@ -26585,6 +27059,7 @@ targets:
 - name: xds_fallback_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/scoped_env_var.h
@@ -26736,6 +27211,7 @@ targets:
 - name: xds_fault_injection_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/end2end/counted_service.h
@@ -26887,6 +27363,7 @@ targets:
 - name: xds_gcp_authn_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/end2end/counted_service.h
@@ -27038,6 +27515,7 @@ targets:
 - name: xds_http_connect_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/end2end/fixtures/http_proxy_fixture.h
@@ -27192,6 +27670,7 @@ targets:
 - name: xds_http_filters_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/scoped_env_var.h
@@ -27335,6 +27814,7 @@ targets:
 - name: xds_lb_policy_registry_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/scoped_env_var.h
@@ -27464,6 +27944,7 @@ targets:
 - name: xds_listener_resource_type_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/util/cli_call.h
@@ -27609,6 +28090,7 @@ targets:
 - name: xds_matcher_parse_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/core/ext/upb-gen/cel/expr/checked.upb.h
@@ -27822,6 +28304,7 @@ targets:
 - name: xds_matcher_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -27832,6 +28315,7 @@ targets:
 - name: xds_metadata_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - third_party/protoc-gen-validate/validate/validate.h
@@ -27910,6 +28394,7 @@ targets:
 - name: xds_outlier_detection_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/cpp/end2end/counted_service.h
@@ -28062,6 +28547,7 @@ targets:
 - name: xds_override_host_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/scoped_env_var.h
@@ -28215,6 +28701,7 @@ targets:
 - name: xds_override_host_lb_config_parser_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -28225,6 +28712,7 @@ targets:
 - name: xds_override_host_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/event_engine/event_engine_test_utils.h
@@ -28242,6 +28730,7 @@ targets:
 - name: xds_pick_first_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/scoped_env_var.h
@@ -28397,6 +28886,7 @@ targets:
 - name: xds_ring_hash_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/scoped_env_var.h
@@ -28551,6 +29041,7 @@ targets:
 - name: xds_rls_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/scoped_env_var.h
@@ -28706,6 +29197,7 @@ targets:
 - name: xds_route_config_resource_type_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/scoped_env_var.h
@@ -28827,6 +29319,7 @@ targets:
 - name: xds_routing_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/scoped_env_var.h
@@ -28980,6 +29473,7 @@ targets:
 - name: xds_routing_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
@@ -28990,6 +29484,7 @@ targets:
 - name: xds_security_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/audit_logging_utils.h
@@ -29150,6 +29645,7 @@ targets:
 - name: xds_security_spiffe_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/audit_logging_utils.h
@@ -29310,6 +29806,7 @@ targets:
 - name: xds_stats_watcher_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - src/cpp/server/csds/csds.h
@@ -29467,6 +29964,7 @@ targets:
 - name: xds_wrr_end2end_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers:
   - test/core/test_util/fake_stats_plugin.h
@@ -29623,6 +30121,7 @@ targets:
 - name: ztrace_collector_test
   gtest: true
   build: test
+  run: false
   language: c++
   headers: []
   src:
