@@ -7,8 +7,8 @@
    <summary>A high performance, open source, general RPC framework that puts mobile and HTTP/2 first.</summary>
    <description>Remote Procedure Calls (RPCs) provide a useful abstraction for building distributed applications and services. The libraries in this repository provide a concrete implementation of the gRPC protocol, layered over HTTP/2. These libraries enable communication between clients and servers using any combination of the supported languages.</description>
    <lead>
-    <name>Stanley Cheung</name>
-    <user>stanleycheung</user>
+    <name>Pawan Bhardwaj</name>
+    <user>pawbhard</user>
     <email>grpc-packages@google.com</email>
     <active>yes</active>
    </lead>
