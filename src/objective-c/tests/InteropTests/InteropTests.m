@@ -1334,19 +1334,19 @@ static dispatch_once_t initGlobalInterceptorFactory;
         initWithRequestOptions:callRequest
                        message:request
                responseHandler:[[InteropTestsBlockCallbacks alloc]
-                                    initWithInitialMetadataCallback:nil
-                                    messageCallback:^(id message) {
-                                      [expectMessages fulfill];
-                                      // Each delivery must be explicitly unlocked under flow control.
-                                      [call receiveNextMessage];
-                                    }
-                                    closeCallback:^(NSDictionary *trailingMetadata,
-                                                    NSError *error) {
-                                      assertBlock(error == nil,
-                                                  [NSString stringWithFormat:
-                                                                @"Unexpected error: %@", error]);
-                                      [expectClose fulfill];
-                                    }]
+                                   initWithInitialMetadataCallback:nil
+                                   messageCallback:^(id message) {
+                                     [expectMessages fulfill];
+                                     // Each delivery must be explicitly unlocked under flow
+                                     // control.
+                                     [call receiveNextMessage];
+                                   }
+                                   closeCallback:^(NSDictionary *trailingMetadata, NSError *error) {
+                                     assertBlock(error == nil,
+                                                 [NSString stringWithFormat:@"Unexpected error: %@",
+                                                                            error]);
+                                     [expectClose fulfill];
+                                   }]
                    callOptions:options
                  responseClass:[RMTStreamingOutputCallResponse class]];
     [call start];
@@ -1362,8 +1362,8 @@ static dispatch_once_t initGlobalInterceptorFactory;
     __weak XCTestExpectation *expectFirstMessage =
         [self expectationWithDescription:@"First server message received"];
     __weak __block XCTestExpectation *expectSecondMessage = nil;
-    __weak XCTestExpectation *expectSecondBlocked =
-        [self expectationWithDescription:@"Second message not delivered without receiveNextMessage"];
+    __weak XCTestExpectation *expectSecondBlocked = [self
+        expectationWithDescription:@"Second message not delivered without receiveNextMessage"];
     expectSecondBlocked.inverted = YES;
     __weak XCTestExpectation *expectClose =
         [self expectationWithDescription:@"Call closed after receiveNextMessage"];
@@ -1392,20 +1392,19 @@ static dispatch_once_t initGlobalInterceptorFactory;
         initWithRequestOptions:callRequest
                        message:request
                responseHandler:[[InteropTestsBlockCallbacks alloc]
-                                    initWithInitialMetadataCallback:nil
-                                    messageCallback:^(id message) {
-                                      messageCount++;
-                                      if (messageCount == 1) {
-                                        [expectFirstMessage fulfill];
-                                      } else {
-                                        [expectSecondBlocked fulfill];
-                                        [expectSecondMessage fulfill];
-                                      }
-                                    }
-                                    closeCallback:^(NSDictionary *trailingMetadata,
-                                                    NSError *error) {
-                                      [expectClose fulfill];
-                                    }]
+                                   initWithInitialMetadataCallback:nil
+                                   messageCallback:^(id message) {
+                                     messageCount++;
+                                     if (messageCount == 1) {
+                                       [expectFirstMessage fulfill];
+                                     } else {
+                                       [expectSecondBlocked fulfill];
+                                       [expectSecondMessage fulfill];
+                                     }
+                                   }
+                                   closeCallback:^(NSDictionary *trailingMetadata, NSError *error) {
+                                     [expectClose fulfill];
+                                   }]
                    callOptions:options
                  responseClass:[RMTStreamingOutputCallResponse class]];
     [call start];
@@ -1455,17 +1454,16 @@ static dispatch_once_t initGlobalInterceptorFactory;
         initWithRequestOptions:callRequest
                        message:request
                responseHandler:[[InteropTestsBlockCallbacks alloc]
-                                    initWithInitialMetadataCallback:nil
-                                    messageCallback:^(id message) {
-                                      [expectMessages fulfill];
-                                    }
-                                    closeCallback:^(NSDictionary *trailingMetadata,
-                                                    NSError *error) {
-                                      assertBlock(error == nil,
-                                                  [NSString stringWithFormat:
-                                                                @"Unexpected error: %@", error]);
-                                      [expectClose fulfill];
-                                    }]
+                                   initWithInitialMetadataCallback:nil
+                                   messageCallback:^(id message) {
+                                     [expectMessages fulfill];
+                                   }
+                                   closeCallback:^(NSDictionary *trailingMetadata, NSError *error) {
+                                     assertBlock(error == nil,
+                                                 [NSString stringWithFormat:@"Unexpected error: %@",
+                                                                            error]);
+                                     [expectClose fulfill];
+                                   }]
                    callOptions:options
                  responseClass:[RMTStreamingOutputCallResponse class]];
     // Pre-authorize all responses before start; start itself primes 1, so authorize N-1 more.
