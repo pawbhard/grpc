@@ -15,6 +15,7 @@
 # limitations under the License.
 
 load("@build_bazel_rules_apple//apple:ios.bzl", "ios_application")
+load("@build_bazel_rules_apple//apple:macos.bzl", "macos_application")
 load("@build_bazel_rules_apple//apple:tvos.bzl", "tvos_application")
 load("@build_bazel_rules_apple//apple:watchos.bzl", "watchos_application", "watchos_extension")
 load(
@@ -102,6 +103,22 @@ ios_application(
     infoplists = ["InterceptorSample/InterceptorSample/Info.plist"],
     minimum_os_version = "15.0",  # Safe Area Layout Guide used
     deps = ["InterceptorSample-lib"],
+)
+
+grpc_objc_examples_library(
+    name = "macOS-ServerStreaming-lib",
+    srcs = glob(["macOS-ServerStreaming/macOS-ServerStreaming/**/*.m"]),
+    hdrs = glob(["macOS-ServerStreaming/macOS-ServerStreaming/**/*.h"]),
+    sdk_frameworks = ["Cocoa"],
+)
+
+macos_application(
+    name = "macOS-ServerStreaming",
+    bundle_id = "io.grpc.macOS-ServerStreaming",
+    infoplists = ["macOS-ServerStreaming/macOS-ServerStreaming/Info.plist"],
+    minimum_os_version = "11.0",
+    visibility = ["//visibility:public"],
+    deps = [":macOS-ServerStreaming-lib"],
 )
 
 grpc_objc_examples_library(

@@ -97,7 +97,12 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
-/** A unary-request RPC call with Protobuf. */
+/**
+ * An RPC call with a single Protobuf request message. Suitable for unary RPCs and server-streaming
+ * RPCs (one request, multiple responses). When flow control is enabled and the call is used for
+ * server streaming, call receiveNextMessage or receiveNextMessages: after each
+ * didReceiveProtoMessage: callback to unblock delivery of subsequent messages.
+ */
 @interface GRPCUnaryProtoCall : NSObject
 
 - (instancetype)init NS_UNAVAILABLE;
@@ -125,6 +130,22 @@ NS_ASSUME_NONNULL_BEGIN
  * CANCELED if no other error code has already been issued.
  */
 - (void)cancel;
+
+/**
+ * Tell gRPC to receive the next message from the server.
+ *
+ * This method should only be used when flow control is enabled and this call is used for a
+ * server-streaming RPC. After the handler receives a message via didReceiveProtoMessage:, call
+ * this to unblock delivery of the next server message.
+ */
+- (void)receiveNextMessage;
+
+/**
+ * Tell gRPC to receive the next N messages from the server.
+ *
+ * See receiveNextMessage for usage notes.
+ */
+- (void)receiveNextMessages:(NSUInteger)numberOfMessages;
 
 @end
 

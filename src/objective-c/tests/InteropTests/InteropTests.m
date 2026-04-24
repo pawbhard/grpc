@@ -1302,6 +1302,180 @@ static dispatch_once_t initGlobalInterceptorFactory;
   });
 }
 
+- (void)testServerStreamingFlowControlWithUnaryProtoCall {
+  GRPCTestRunWithFlakeRepeats(self, ^(GRPCTestWaiter waiterBlock, GRPCTestAssert assertBlock) {
+    static const int kResponseCount = 3;
+    __weak XCTestExpectation *expectMessages =
+        [self expectationWithDescription:@"All server-streaming messages received"];
+    expectMessages.expectedFulfillmentCount = kResponseCount;
+    __weak XCTestExpectation *expectClose =
+        [self expectationWithDescription:@"Server-streaming call closed"];
+
+    RMTStreamingOutputCallRequest *request = [RMTStreamingOutputCallRequest message];
+    for (int i = 0; i < kResponseCount; i++) {
+      RMTResponseParameters *params = [RMTResponseParameters message];
+      params.size = SMALL_PAYLOAD_SIZE;
+      [request.responseParametersArray addObject:params];
+    }
+
+    GRPCRequestOptions *callRequest =
+        [[GRPCRequestOptions alloc] initWithHost:[[self class] host]
+                                            path:@"/grpc.testing.TestService/StreamingOutputCall"
+                                          safety:GRPCCallSafetyDefault];
+    GRPCMutableCallOptions *options = [[GRPCMutableCallOptions alloc] init];
+    options.transportType = [[self class] transportType];
+    options.transport = [[self class] transport];
+    options.PEMRootCertificates = [[self class] PEMRootCertificates];
+    options.hostNameOverride = [[self class] hostNameOverride];
+    options.flowControlEnabled = YES;
+
+    __block GRPCUnaryProtoCall *call;
+    call = [[GRPCUnaryProtoCall alloc]
+        initWithRequestOptions:callRequest
+                       message:request
+               responseHandler:[[InteropTestsBlockCallbacks alloc]
+                                    initWithInitialMetadataCallback:nil
+                                    messageCallback:^(id message) {
+                                      [expectMessages fulfill];
+                                      // Each delivery must be explicitly unlocked under flow control.
+                                      [call receiveNextMessage];
+                                    }
+                                    closeCallback:^(NSDictionary *trailingMetadata,
+                                                    NSError *error) {
+                                      assertBlock(error == nil,
+                                                  [NSString stringWithFormat:
+                                                                @"Unexpected error: %@", error]);
+                                      [expectClose fulfill];
+                                    }]
+                   callOptions:options
+                 responseClass:[RMTStreamingOutputCallResponse class]];
+    [call start];
+
+    waiterBlock(@[ expectMessages, expectClose ], GRPCInteropTestTimeoutDefault);
+  });
+}
+
+- (void)testServerStreamingBlockedWithoutReceiveNextOnUnaryProtoCall {
+  GRPCTestRunWithFlakeRepeats(self, ^(GRPCTestWaiter waiterBlock, GRPCTestAssert assertBlock) {
+    // Request 2 server responses. start primes one receive, so the first message arrives
+    // automatically. The second should stay blocked until receiveNextMessages: is called.
+    __weak XCTestExpectation *expectFirstMessage =
+        [self expectationWithDescription:@"First server message received"];
+    __weak __block XCTestExpectation *expectSecondMessage = nil;
+    __weak XCTestExpectation *expectSecondBlocked =
+        [self expectationWithDescription:@"Second message not delivered without receiveNextMessage"];
+    expectSecondBlocked.inverted = YES;
+    __weak XCTestExpectation *expectClose =
+        [self expectationWithDescription:@"Call closed after receiveNextMessage"];
+
+    RMTStreamingOutputCallRequest *request = [RMTStreamingOutputCallRequest message];
+    for (int i = 0; i < 2; i++) {
+      RMTResponseParameters *params = [RMTResponseParameters message];
+      params.size = SMALL_PAYLOAD_SIZE;
+      [request.responseParametersArray addObject:params];
+    }
+
+    GRPCRequestOptions *callRequest =
+        [[GRPCRequestOptions alloc] initWithHost:[[self class] host]
+                                            path:@"/grpc.testing.TestService/StreamingOutputCall"
+                                          safety:GRPCCallSafetyDefault];
+    GRPCMutableCallOptions *options = [[GRPCMutableCallOptions alloc] init];
+    options.transportType = [[self class] transportType];
+    options.transport = [[self class] transport];
+    options.PEMRootCertificates = [[self class] PEMRootCertificates];
+    options.hostNameOverride = [[self class] hostNameOverride];
+    options.flowControlEnabled = YES;
+
+    __block int messageCount = 0;
+    __block GRPCUnaryProtoCall *call;
+    call = [[GRPCUnaryProtoCall alloc]
+        initWithRequestOptions:callRequest
+                       message:request
+               responseHandler:[[InteropTestsBlockCallbacks alloc]
+                                    initWithInitialMetadataCallback:nil
+                                    messageCallback:^(id message) {
+                                      messageCount++;
+                                      if (messageCount == 1) {
+                                        [expectFirstMessage fulfill];
+                                      } else {
+                                        [expectSecondBlocked fulfill];
+                                        [expectSecondMessage fulfill];
+                                      }
+                                    }
+                                    closeCallback:^(NSDictionary *trailingMetadata,
+                                                    NSError *error) {
+                                      [expectClose fulfill];
+                                    }]
+                   callOptions:options
+                 responseClass:[RMTStreamingOutputCallResponse class]];
+    [call start];
+
+    // Verify first message arrives and second remains blocked.
+    waiterBlock(@[ expectFirstMessage, expectSecondBlocked ], 2.0);
+
+    // Unblock and verify the second message and close now arrive.
+    expectSecondMessage =
+        [self expectationWithDescription:@"Second message delivered after receiveNextMessages:"];
+    [call receiveNextMessages:1];
+    waiterBlock(@[ expectSecondMessage, expectClose ], GRPCInteropTestTimeoutDefault);
+  });
+}
+
+- (void)testServerStreamingBulkReceiveWithUnaryProtoCall {
+  GRPCTestRunWithFlakeRepeats(self, ^(GRPCTestWaiter waiterBlock, GRPCTestAssert assertBlock) {
+    // Pre-authorize N messages at once via receiveNextMessages:N before start, then verify all
+    // N arrive without any per-message receiveNextMessage calls.
+    static const int kResponseCount = 3;
+    __weak XCTestExpectation *expectMessages =
+        [self expectationWithDescription:@"All messages delivered after bulk receiveNextMessages:"];
+    expectMessages.expectedFulfillmentCount = kResponseCount;
+    __weak XCTestExpectation *expectClose =
+        [self expectationWithDescription:@"Server-streaming call closed"];
+
+    RMTStreamingOutputCallRequest *request = [RMTStreamingOutputCallRequest message];
+    for (int i = 0; i < kResponseCount; i++) {
+      RMTResponseParameters *params = [RMTResponseParameters message];
+      params.size = SMALL_PAYLOAD_SIZE;
+      [request.responseParametersArray addObject:params];
+    }
+
+    GRPCRequestOptions *callRequest =
+        [[GRPCRequestOptions alloc] initWithHost:[[self class] host]
+                                            path:@"/grpc.testing.TestService/StreamingOutputCall"
+                                          safety:GRPCCallSafetyDefault];
+    GRPCMutableCallOptions *options = [[GRPCMutableCallOptions alloc] init];
+    options.transportType = [[self class] transportType];
+    options.transport = [[self class] transport];
+    options.PEMRootCertificates = [[self class] PEMRootCertificates];
+    options.hostNameOverride = [[self class] hostNameOverride];
+    options.flowControlEnabled = YES;
+
+    __block GRPCUnaryProtoCall *call;
+    call = [[GRPCUnaryProtoCall alloc]
+        initWithRequestOptions:callRequest
+                       message:request
+               responseHandler:[[InteropTestsBlockCallbacks alloc]
+                                    initWithInitialMetadataCallback:nil
+                                    messageCallback:^(id message) {
+                                      [expectMessages fulfill];
+                                    }
+                                    closeCallback:^(NSDictionary *trailingMetadata,
+                                                    NSError *error) {
+                                      assertBlock(error == nil,
+                                                  [NSString stringWithFormat:
+                                                                @"Unexpected error: %@", error]);
+                                      [expectClose fulfill];
+                                    }]
+                   callOptions:options
+                 responseClass:[RMTStreamingOutputCallResponse class]];
+    // Pre-authorize all responses before start; start itself primes 1, so authorize N-1 more.
+    [call receiveNextMessages:kResponseCount - 1];
+    [call start];
+
+    waiterBlock(@[ expectMessages, expectClose ], GRPCInteropTestTimeoutDefault);
+  });
+}
+
 - (void)testEmptyStreamRPC {
   GRPCTestRunWithFlakeRepeats(self, ^(GRPCTestWaiter waiterBlock, GRPCTestAssert assertBlock) {
     RMTTestService *service = [RMTTestService serviceWithHost:[[self class] host]];
