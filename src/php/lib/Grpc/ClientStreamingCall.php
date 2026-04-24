@@ -33,6 +33,7 @@ class ClientStreamingCall extends AbstractCall
      */
     public function start(array $metadata = [])
     {
+        $metadata = $this->_applyCallCredentials($metadata);
         $this->call->startBatch([
             OP_SEND_INITIAL_METADATA => $metadata,
         ]);

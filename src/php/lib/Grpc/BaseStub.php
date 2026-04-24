@@ -29,6 +29,7 @@ class BaseStub
     private $hostname_override;
     private $channel;
     private $call_invoker;
+    private $channel_is_insecure = false;
 
     // a callback function
     private $update_metadata;
@@ -66,6 +67,7 @@ class BaseStub
             $this->call_invoker = $opts['grpc_call_invoker'];
             unset($opts['grpc_call_invoker']);
             $channel_opts = $this->updateOpts($opts);
+            $this->channel_is_insecure = (array_key_exists('credentials', $opts) && $opts['credentials'] === null);
             // If the grpc_call_invoker is defined, use the channel created by the call invoker.
             $this->channel = $this->call_invoker->createChannelFactory($hostname, $channel_opts);
             return;
@@ -78,10 +80,12 @@ class BaseStub
                     'or an InterceptorChannel object created by '.
                     'Interceptor::intercept($channel, Interceptor|Interceptor[] $interceptors)');
             }
+            // Security state cannot be determined for a pre-built channel.
             $this->channel = $channel;
             return;
         }
 
+        $this->channel_is_insecure = (array_key_exists('credentials', $opts) && $opts['credentials'] === null);
         $this->channel = static::getDefaultChannel($hostname, $opts);
     }
 
@@ -260,6 +264,42 @@ class BaseStub
         return $metadata_copy;
     }
 
+    // Cached result of the GRPC_PHP_PURE_CALL_CREDENTIALS env var check,
+    // mirroring the same cache in AbstractCall so the env read happens once.
+    private static $pure_call_credentials_enabled = null;
+
+    private static function isPureCallCredentialsEnabled(): bool
+    {
+        if (self::$pure_call_credentials_enabled === null) {
+            self::$pure_call_credentials_enabled =
+                (bool)getenv('GRPC_PHP_PURE_CALL_CREDENTIALS');
+        }
+        return self::$pure_call_credentials_enabled;
+    }
+
+    /**
+     * Guard used by the pure-PHP credential path: reject call_credentials_callback
+     * on insecure channels before the call is created, rather than silently
+     * ignoring the credentials as the gRPC C core plugin layer would.
+     * Only active when GRPC_PHP_PURE_CALL_CREDENTIALS=1.
+     *
+     * Limitation: when a pre-built Channel object is passed to the constructor,
+     * channel_is_insecure remains false and this guard does not fire. Users who
+     * construct channels directly are responsible for not mixing insecure channels
+     * with call credentials.
+     */
+    private function _assertSecureChannelForCredentials(array $options): void
+    {
+        if (!empty($options['call_credentials_callback'])
+            && $this->channel_is_insecure
+            && self::isPureCallCredentialsEnabled()
+        ) {
+            throw new \InvalidArgumentException(
+                'Call credentials cannot be used with insecure channel credentials'
+            );
+        }
+    }
+
     /**
      * Create a function which can be used to create UnaryCall
      *
@@ -275,13 +315,17 @@ class BaseStub
                          $deserialize,
                          array $metadata = [],
                          array $options = []) use ($channel) {
+            $this->_assertSecureChannelForCredentials($options);
+            // _get_jwt_aud_uri must be called before call construction so the
+            // result can be injected as _grpc_service_url for AbstractCall.
+            $jwt_aud_uri = $this->_get_jwt_aud_uri($method);
+            $options['_grpc_service_url'] = $jwt_aud_uri;
             $call = $this->call_invoker->UnaryCall(
                 $channel,
                 $method,
                 $deserialize,
                 $options
             );
-            $jwt_aud_uri = $this->_get_jwt_aud_uri($method);
             if (is_callable($this->update_metadata)) {
                 $metadata = call_user_func(
                     $this->update_metadata,
@@ -311,13 +355,17 @@ class BaseStub
                          $deserialize,
                          array $metadata = [],
                          array $options = []) use ($channel) {
+            $this->_assertSecureChannelForCredentials($options);
+            // _get_jwt_aud_uri must be called before call construction so the
+            // result can be injected as _grpc_service_url for AbstractCall.
+            $jwt_aud_uri = $this->_get_jwt_aud_uri($method);
+            $options['_grpc_service_url'] = $jwt_aud_uri;
             $call = $this->call_invoker->ClientStreamingCall(
                 $channel,
                 $method,
                 $deserialize,
                 $options
             );
-            $jwt_aud_uri = $this->_get_jwt_aud_uri($method);
             if (is_callable($this->update_metadata)) {
                 $metadata = call_user_func(
                     $this->update_metadata,
@@ -348,13 +396,17 @@ class BaseStub
                          $deserialize,
                          array $metadata = [],
                          array $options = []) use ($channel) {
+            $this->_assertSecureChannelForCredentials($options);
+            // _get_jwt_aud_uri must be called before call construction so the
+            // result can be injected as _grpc_service_url for AbstractCall.
+            $jwt_aud_uri = $this->_get_jwt_aud_uri($method);
+            $options['_grpc_service_url'] = $jwt_aud_uri;
             $call = $this->call_invoker->ServerStreamingCall(
                 $channel,
                 $method,
                 $deserialize,
                 $options
             );
-            $jwt_aud_uri = $this->_get_jwt_aud_uri($method);
             if (is_callable($this->update_metadata)) {
                 $metadata = call_user_func(
                     $this->update_metadata,
@@ -384,13 +436,17 @@ class BaseStub
                          $deserialize,
                          array $metadata = [],
                          array $options = []) use ($channel) {
+            $this->_assertSecureChannelForCredentials($options);
+            // _get_jwt_aud_uri must be called before call construction so the
+            // result can be injected as _grpc_service_url for AbstractCall.
+            $jwt_aud_uri = $this->_get_jwt_aud_uri($method);
+            $options['_grpc_service_url'] = $jwt_aud_uri;
             $call = $this->call_invoker->BidiStreamingCall(
                 $channel,
                 $method,
                 $deserialize,
                 $options
             );
-            $jwt_aud_uri = $this->_get_jwt_aud_uri($method);
             if (is_callable($this->update_metadata)) {
                 $metadata = call_user_func(
                     $this->update_metadata,
