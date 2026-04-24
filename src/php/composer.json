@@ -5,7 +5,7 @@
   "version": "1.81.0",
   "require": {
     "php": ">=7.1.0",
-    "google/protobuf": "^v3.3.0"
+    "google/protobuf": "^4.33.6"
   },
   "require-dev": {
     "google/auth": "^v1.3.0"
@@ -15,15 +15,6 @@
       "Grpc\\": "lib/Grpc/",
       "": ["tests/interop/",
            "tests/generated_code/"]
-    }
-  },
-  "config": {
-    "audit": {
-      "abandoned": "ignore",
-      "ignore": {
-        "PKSA-tcfz-w4fm-hhk9": "test env only",
-        "PKSA-yqjh-6qvh-g493": "test env only"
-      }
     }
   }
 }
