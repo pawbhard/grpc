@@ -36,6 +36,7 @@ class ServerStreamingCall extends AbstractCall
      */
     public function start($data, array $metadata = [], array $options = [])
     {
+        $metadata = $this->_applyCallCredentials($metadata);
         $message_array = ['message' => $this->_serializeMessage($data)];
         if (array_key_exists('flags', $options)) {
             $message_array['flags'] = $options['flags'];

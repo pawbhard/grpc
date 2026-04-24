@@ -16,5 +16,14 @@
       "": ["tests/interop/",
            "tests/generated_code/"]
     }
+  },
+  "config": {
+    "audit": {
+      "abandoned": "ignore",
+      "ignore": {
+        "PKSA-tcfz-w4fm-hhk9": "test env only",
+        "PKSA-yqjh-6qvh-g493": "test env only"
+      }
+    }
   }
 }
