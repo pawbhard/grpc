@@ -166,8 +166,8 @@ CORE_END2END_TEST(Http2FullstackSingleHopTests,
   c2.NewBatch(302).RecvStatusOnClient(server_status2);
   Expect(301, true);
   Step();
-  auto s2 = RequestCall(401);s
-  Expect(401, true);
+  auto s2 = RequestCall(401);
+  s Expect(401, true);
   Step();
   // First two RPCs should be on the same connection.
   auto uuids_after_2_rpcs = GetServerSocketUuids(server());
