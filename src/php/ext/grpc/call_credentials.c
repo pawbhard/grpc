@@ -39,7 +39,28 @@ PHP_GRPC_FREE_WRAPPED_FUNC_START(wrapped_grpc_call_credentials)
   if (p->wrapped != NULL) {
     grpc_call_credentials_release(p->wrapped);
   }
+  if (Z_TYPE(p->php_callback) != IS_UNDEF) {
+    zval_ptr_dtor(&p->php_callback);
+  }
 PHP_GRPC_FREE_WRAPPED_FUNC_END()
+
+/* Thread-safe no-op plugin used by ChannelCredentials::createComposite in the
+ * pure-PHP path. Returns empty metadata synchronously without touching PHP
+ * memory, so it is safe to call from any thread including event_engine threads.
+ * The actual auth metadata is injected by AbstractCall::_applyCallCredentials
+ * on the PHP thread before OP_SEND_INITIAL_METADATA is sent. */
+int grpc_php_pure_noop_get_metadata(
+    void *ptr, grpc_auth_metadata_context context,
+    grpc_credentials_plugin_metadata_cb cb, void *user_data,
+    grpc_metadata creds_md[GRPC_METADATA_CREDENTIALS_PLUGIN_SYNC_MAX],
+    size_t *num_creds_md, grpc_status_code *status,
+    const char **error_details) {
+  *num_creds_md = 0;
+  *status = GRPC_STATUS_OK;
+  *error_details = NULL;
+  return 1;  /* synchronous */
+}
+void grpc_php_pure_noop_destroy(void *ptr) {}
 
 /* Initializes an instance of wrapped_grpc_call_credentials to be
  * associated with an object of a class specified by class_type */
@@ -48,6 +69,8 @@ php_grpc_zend_object create_wrapped_grpc_call_credentials(
   PHP_GRPC_ALLOC_CLASS_OBJECT(wrapped_grpc_call_credentials);
   zend_object_std_init(&intern->std, class_type TSRMLS_CC);
   object_properties_init(&intern->std, class_type);
+  /* ecalloc zeroes memory; ZVAL_UNDEF (type=0) is already set, but be explicit */
+  ZVAL_UNDEF(&intern->php_callback);
   PHP_GRPC_FREE_CLASS_OBJECT(wrapped_grpc_call_credentials,
                              call_credentials_ce_handlers);
 }
@@ -61,6 +84,7 @@ zval *grpc_php_wrap_call_credentials(grpc_call_credentials
     PHP_GRPC_GET_WRAPPED_OBJECT(wrapped_grpc_call_credentials,
                                 credentials_object);
   credentials->wrapped = wrapped;
+  ZVAL_UNDEF(&credentials->php_callback);
   return credentials_object;
 }
 
@@ -87,6 +111,19 @@ PHP_METHOD(CallCredentials, createComposite) {
     PHP_GRPC_GET_WRAPPED_OBJECT(wrapped_grpc_call_credentials, cred1_obj);
   wrapped_grpc_call_credentials *cred2 =
     PHP_GRPC_GET_WRAPPED_OBJECT(wrapped_grpc_call_credentials, cred2_obj);
+
+  /* Pure-PHP call credentials (wrapped==NULL) cannot be composed at the C
+   * level. Direct composition is only supported in legacy mode. */
+  if (Z_TYPE(cred1->php_callback) != IS_UNDEF ||
+      Z_TYPE(cred2->php_callback) != IS_UNDEF) {
+    zend_throw_exception(spl_ce_InvalidArgumentException,
+                         "CallCredentials::createComposite is not supported "
+                         "with pure-PHP call credentials; use "
+                         "ChannelCredentials::createComposite instead",
+                         1 TSRMLS_CC);
+    return;
+  }
+
   grpc_call_credentials *creds =
     grpc_composite_call_credentials_create(cred1->wrapped, cred2->wrapped,
                                            NULL);
@@ -95,11 +132,39 @@ PHP_METHOD(CallCredentials, createComposite) {
 }
 
 /**
- * Create a call credentials object from the plugin API
- * @param function $fci The callback function
+ * Create a call credentials object from the plugin API.
+ *
+ * When GRPC_PHP_PURE_CALL_CREDENTIALS=1 the callback is stored on the PHP
+ * object and no C plugin is registered, avoiding the ZTS crash in
+ * plugin_get_metadata (issue #41917). The callback is applied on the PHP
+ * thread by AbstractCall::_applyCallCredentials before every RPC send.
+ *
+ * @param callable $callback The metadata callback function
  * @return CallCredentials The new call credentials object
  */
 PHP_METHOD(CallCredentials, createFromPlugin) {
+  if (grpc_php_is_pure_call_creds_enabled()) {
+    zval *callback_zval;
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "z",
+                              &callback_zval) == FAILURE ||
+        !zend_is_callable(callback_zval, 0, NULL)) {
+      zend_throw_exception(spl_ce_InvalidArgumentException,
+                           "createFromPlugin expects 1 callback",
+                           1 TSRMLS_CC);
+      return;
+    }
+    zval *creds_object;
+    PHP_GRPC_MAKE_STD_ZVAL(creds_object);
+    object_init_ex(creds_object, grpc_ce_call_credentials);
+    wrapped_grpc_call_credentials *credentials =
+      PHP_GRPC_GET_WRAPPED_OBJECT(wrapped_grpc_call_credentials, creds_object);
+    credentials->wrapped = NULL;
+    ZVAL_COPY(&credentials->php_callback, callback_zval);
+    RETURN_DESTROY_ZVAL(creds_object);
+  }
+
+  /* Legacy path: register the C plugin that invokes PHP on the event_engine
+   * thread. Safe on NTS PHP; crashes on ZTS (issue #41917). */
   zend_fcall_info *fci;
   zend_fcall_info_cache *fci_cache;
 
@@ -137,6 +202,20 @@ PHP_METHOD(CallCredentials, createFromPlugin) {
     grpc_metadata_credentials_create_from_plugin(plugin, GRPC_PRIVACY_AND_INTEGRITY, NULL);
   zval *creds_object = grpc_php_wrap_call_credentials(creds TSRMLS_CC);
   RETURN_DESTROY_ZVAL(creds_object);
+}
+
+/**
+ * Return the stored PHP callback, or null when in legacy mode.
+ * Used by AbstractCall::setCallCredentials to detect pure-PHP creds.
+ * @return callable|null
+ */
+PHP_METHOD(CallCredentials, getPhpCallCredentialsCallback) {
+  wrapped_grpc_call_credentials *creds =
+    PHP_GRPC_GET_WRAPPED_OBJECT(wrapped_grpc_call_credentials, getThis());
+  if (Z_TYPE(creds->php_callback) == IS_UNDEF) {
+    RETURN_NULL();
+  }
+  RETURN_ZVAL(&creds->php_callback, 1, 0);
 }
 
 /* Callback function for plugin creds API */
@@ -232,11 +311,16 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_createFromPlugin, 0, 0, 1)
   ZEND_ARG_INFO(0, callback)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_getPhpCallCredentialsCallback, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
 static zend_function_entry call_credentials_methods[] = {
   PHP_ME(CallCredentials, createComposite, arginfo_createComposite,
          ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
   PHP_ME(CallCredentials, createFromPlugin, arginfo_createFromPlugin,
          ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+  PHP_ME(CallCredentials, getPhpCallCredentialsCallback,
+         arginfo_getPhpCallCredentialsCallback, ZEND_ACC_PUBLIC)
   PHP_FE_END
 };
 

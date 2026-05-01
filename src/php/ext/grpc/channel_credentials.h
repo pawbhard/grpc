@@ -29,10 +29,13 @@ extern zend_class_entry *grpc_ce_channel_credentials;
 
 /* Wrapper struct for grpc_channel_credentials that can be associated
  * with a PHP object */
-PHP_GRPC_WRAP_OBJECT_START(wrapped_grpc_channel_credentials) 
+PHP_GRPC_WRAP_OBJECT_START(wrapped_grpc_channel_credentials)
   grpc_channel_credentials *wrapped;
   char *hashstr;
   zend_bool has_call_creds;
+  /* Non-IS_UNDEF only in pure-PHP experiment path when createComposite is
+   * called with a pure-PHP CallCredentials object. */
+  zval php_callback;
 PHP_GRPC_WRAP_OBJECT_END(wrapped_grpc_channel_credentials)
 
 static inline wrapped_grpc_channel_credentials

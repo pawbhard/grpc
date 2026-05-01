@@ -34,6 +34,7 @@
 #include <grpc/support/alloc.h>
 #include <grpc/support/log.h>
 
+#include "call_credentials.h"
 #include "completion_queue.h"
 #include "channel_credentials.h"
 #include "timeval.h"
@@ -88,6 +89,9 @@ PHP_GRPC_FREE_WRAPPED_FUNC_START(wrapped_grpc_channel)
     php_grpc_channel_unref(p->wrapper);
     p->wrapper = NULL;
   }
+  if (Z_TYPE(p->php_call_creds_callback) != IS_UNDEF) {
+    zval_ptr_dtor(&p->php_call_creds_callback);
+  }
 PHP_GRPC_FREE_WRAPPED_FUNC_END()
 
 /* Initializes an instance of wrapped_grpc_channel to be associated with an
@@ -97,6 +101,7 @@ php_grpc_zend_object create_wrapped_grpc_channel(zend_class_entry *class_type
   PHP_GRPC_ALLOC_CLASS_OBJECT(wrapped_grpc_channel);
   zend_object_std_init(&intern->std, class_type TSRMLS_CC);
   object_properties_init(&intern->std, class_type);
+  ZVAL_UNDEF(&intern->php_call_creds_callback);
   PHP_GRPC_FREE_CLASS_OBJECT(wrapped_grpc_channel, channel_ce_handlers);
 }
 
@@ -471,6 +476,13 @@ PHP_METHOD(Channel, __construct) {
       update_and_get_target_upper_bound(target, target_upper_bound);
     }
   }
+
+  /* Pure-PHP path: forward the PHP callback from the composite channel
+   * credentials to this Channel object so AbstractCall can pick it up. */
+  if (grpc_php_is_pure_call_creds_enabled() &&
+      creds != NULL && Z_TYPE(creds->php_callback) != IS_UNDEF) {
+    ZVAL_COPY(&channel->php_call_creds_callback, &creds->php_callback);
+  }
 }
 
 /**
@@ -565,6 +577,20 @@ PHP_METHOD(Channel, watchConnectivityState) {
                                   gpr_inf_future(GPR_CLOCK_REALTIME), NULL);
   gpr_mu_unlock(&channel->wrapper->mu);
   RETURN_BOOL(event.success);
+}
+
+/**
+ * Return the PHP call-credentials callback stored on this channel, or null.
+ * Used by AbstractCall to pick up channel-level pure-PHP credentials.
+ * @return callable|null
+ */
+PHP_METHOD(Channel, getPhpCallCredentialsCallback) {
+  wrapped_grpc_channel *channel =
+    PHP_GRPC_GET_WRAPPED_OBJECT(wrapped_grpc_channel, getThis());
+  if (Z_TYPE(channel->php_call_creds_callback) == IS_UNDEF) {
+    RETURN_NULL();
+  }
+  RETURN_ZVAL(&channel->php_call_creds_callback, 1, 0);
 }
 
 /**
@@ -753,6 +779,9 @@ ZEND_END_ARG_INFO()
 ZEND_BEGIN_ARG_INFO_EX(arginfo_close, 0, 0, 0)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_getPhpCallCredentialsCallback, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
 #ifdef GRPC_PHP_DEBUG
 ZEND_BEGIN_ARG_INFO_EX(arginfo_getChannelInfo, 0, 0, 0)
 ZEND_END_ARG_INFO()
@@ -776,6 +805,8 @@ static zend_function_entry channel_methods[] = {
          ZEND_ACC_PUBLIC)
   PHP_ME(Channel, close, arginfo_close,
          ZEND_ACC_PUBLIC)
+  PHP_ME(Channel, getPhpCallCredentialsCallback,
+         arginfo_getPhpCallCredentialsCallback, ZEND_ACC_PUBLIC)
   #ifdef GRPC_PHP_DEBUG
   PHP_ME(Channel, getChannelInfo, arginfo_getChannelInfo,
          ZEND_ACC_PUBLIC)

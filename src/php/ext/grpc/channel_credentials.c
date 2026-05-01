@@ -57,6 +57,9 @@ PHP_GRPC_FREE_WRAPPED_FUNC_START(wrapped_grpc_channel_credentials)
     grpc_channel_credentials_release(p->wrapped);
     p->wrapped = NULL;
   }
+  if (Z_TYPE(p->php_callback) != IS_UNDEF) {
+    zval_ptr_dtor(&p->php_callback);
+  }
 PHP_GRPC_FREE_WRAPPED_FUNC_END()
 
 /* Initializes an instance of wrapped_grpc_channel_credentials to be
@@ -66,6 +69,7 @@ php_grpc_zend_object create_wrapped_grpc_channel_credentials(
   PHP_GRPC_ALLOC_CLASS_OBJECT(wrapped_grpc_channel_credentials);
   zend_object_std_init(&intern->std, class_type TSRMLS_CC);
   object_properties_init(&intern->std, class_type);
+  ZVAL_UNDEF(&intern->php_callback);
   PHP_GRPC_FREE_CLASS_OBJECT(wrapped_grpc_channel_credentials,
                              channel_credentials_ce_handlers);
 }
@@ -82,6 +86,7 @@ zval *grpc_php_wrap_channel_credentials(grpc_channel_credentials *wrapped,
   credentials->wrapped = wrapped;
   credentials->hashstr = hashstr;
   credentials->has_call_creds = has_call_creds;
+  ZVAL_UNDEF(&credentials->php_callback);
   return credentials_object;
 }
 
@@ -215,6 +220,38 @@ PHP_METHOD(ChannelCredentials, createComposite) {
     PHP_GRPC_GET_WRAPPED_OBJECT(wrapped_grpc_channel_credentials, cred1_obj);
   wrapped_grpc_call_credentials *cred2 =
     PHP_GRPC_GET_WRAPPED_OBJECT(wrapped_grpc_call_credentials, cred2_obj);
+
+  /* Pure-PHP path: cred2 carries a PHP callback rather than a real C plugin.
+   * Register a thread-safe no-op C plugin so grpc core is satisfied, then
+   * store the PHP callback on the resulting channel credentials object.  The
+   * callback will be forwarded to the AbstractCall on the PHP thread. */
+  if (grpc_php_is_pure_call_creds_enabled() &&
+      Z_TYPE(cred2->php_callback) != IS_UNDEF) {
+    grpc_metadata_credentials_plugin noop_plugin;
+    noop_plugin.get_metadata = grpc_php_pure_noop_get_metadata;
+    noop_plugin.destroy = grpc_php_pure_noop_destroy;
+    noop_plugin.state = NULL;
+    noop_plugin.type = "";
+    grpc_call_credentials *noop_creds =
+      grpc_metadata_credentials_create_from_plugin(
+          noop_plugin, GRPC_PRIVACY_AND_INTEGRITY, NULL);
+    grpc_channel_credentials *composite_creds =
+      grpc_composite_channel_credentials_create(cred1->wrapped, noop_creds,
+                                                NULL);
+    grpc_call_credentials_release(noop_creds);
+    php_grpc_int cred1_len = strlen(cred1->hashstr);
+    char *cred1_hashstr = malloc(cred1_len + 1);
+    strcpy(cred1_hashstr, cred1->hashstr);
+    zval *creds_object =
+      grpc_php_wrap_channel_credentials(composite_creds, cred1_hashstr,
+                                        true TSRMLS_CC);
+    wrapped_grpc_channel_credentials *result =
+      PHP_GRPC_GET_WRAPPED_OBJECT(wrapped_grpc_channel_credentials,
+                                  creds_object);
+    ZVAL_COPY(&result->php_callback, &cred2->php_callback);
+    RETURN_DESTROY_ZVAL(creds_object);
+  }
+
   grpc_channel_credentials *creds =
     grpc_composite_channel_credentials_create(cred1->wrapped, cred2->wrapped,
                                               NULL);
@@ -226,6 +263,20 @@ PHP_METHOD(ChannelCredentials, createComposite) {
   zval *creds_object =
     grpc_php_wrap_channel_credentials(creds, cred1_hashstr, true TSRMLS_CC);
   RETURN_DESTROY_ZVAL(creds_object);
+}
+
+/**
+ * Return the stored PHP callback, or null when in legacy mode.
+ * Used by Channel::getPhpCallCredentialsCallback to propagate the callback.
+ * @return callable|null
+ */
+PHP_METHOD(ChannelCredentials, getPhpCallCredentialsCallback) {
+  wrapped_grpc_channel_credentials *creds =
+    PHP_GRPC_GET_WRAPPED_OBJECT(wrapped_grpc_channel_credentials, getThis());
+  if (Z_TYPE(creds->php_callback) == IS_UNDEF) {
+    RETURN_NULL();
+  }
+  RETURN_ZVAL(&creds->php_callback, 1, 0);
 }
 
 /**
@@ -303,6 +354,9 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_createXds, 0, 0, 1)
   ZEND_ARG_OBJ_INFO(0, fallback_creds, Grpc\\ChannelCredentials, 1)
 ZEND_END_ARG_INFO()
 
+ZEND_BEGIN_ARG_INFO_EX(arginfo_getPhpCallCredentialsCallback_cc, 0, 0, 0)
+ZEND_END_ARG_INFO()
+
 static zend_function_entry channel_credentials_methods[] = {
   PHP_ME(ChannelCredentials, setDefaultRootsPem, arginfo_setDefaultRootsPem,
          ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
@@ -320,6 +374,8 @@ static zend_function_entry channel_credentials_methods[] = {
          ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
   PHP_ME(ChannelCredentials, createXds, arginfo_createXds,
          ZEND_ACC_PUBLIC | ZEND_ACC_STATIC)
+  PHP_ME(ChannelCredentials, getPhpCallCredentialsCallback,
+         arginfo_getPhpCallCredentialsCallback_cc, ZEND_ACC_PUBLIC)
   PHP_FE_END
 };
 

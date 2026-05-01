@@ -46,6 +46,11 @@ typedef struct _grpc_channel_wrapper {
 /* Wrapper struct for grpc_channel that can be associated with a PHP object */
 PHP_GRPC_WRAP_OBJECT_START(wrapped_grpc_channel)
   grpc_channel_wrapper *wrapper;
+  /* Non-IS_UNDEF only in pure-PHP experiment path when the channel was created
+   * with composite credentials carrying a PHP callback. Lives on the PHP
+   * object (not the shared grpc_channel_wrapper) so it is safe to read on
+   * the PHP thread without locks. */
+  zval php_call_creds_callback;
 PHP_GRPC_WRAP_OBJECT_END(wrapped_grpc_channel)
 
 static inline wrapped_grpc_channel

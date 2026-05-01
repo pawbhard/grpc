@@ -96,6 +96,18 @@ abstract class AbstractCall
                 $this->call->setCredentials($call_credentials);
             }
         }
+        // Pick up any PHP callback embedded in the channel's composite creds
+        // (set when ChannelCredentials::createComposite is used with a pure-PHP
+        // CallCredentials in the GRPC_PHP_PURE_CALL_CREDENTIALS=1 experiment).
+        if (self::isPureCallCredentialsEnabled()
+            && $this->call_credentials_callback === null
+            && method_exists($channel, 'getPhpCallCredentialsCallback')
+        ) {
+            $cb = $channel->getPhpCallCredentialsCallback();
+            if ($cb !== null) {
+                $this->call_credentials_callback = $cb;
+            }
+        }
     }
 
     /**
@@ -237,8 +249,19 @@ abstract class AbstractCall
      */
     public function setCallCredentials($call_credentials)
     {
-        if (self::isPureCallCredentialsEnabled() && is_callable($call_credentials)) {
-            $this->call_credentials_callback = $call_credentials;
+        if (self::isPureCallCredentialsEnabled()) {
+            if (is_callable($call_credentials)) {
+                $this->call_credentials_callback = $call_credentials;
+            } elseif ($call_credentials instanceof CallCredentials) {
+                $cb = $call_credentials->getPhpCallCredentialsCallback();
+                if ($cb !== null) {
+                    $this->call_credentials_callback = $cb;
+                } else {
+                    $this->call->setCredentials($call_credentials);
+                }
+            } else {
+                $this->call->setCredentials($call_credentials);
+            }
         } else {
             $this->call->setCredentials($call_credentials);
         }
