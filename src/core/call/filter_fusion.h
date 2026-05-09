@@ -908,12 +908,12 @@ void ExecuteCombined(Call* call, T* call_final_info) {
                             typename FilterMethods::Idxs());
 }
 
-// Helpers to compute the return type of ExecuteCombined/WithChannelAccess without
-// requiring a complete Derived::Call type.  Used only in decltype expressions
-// (declared but intentionally never defined).
+// Helpers to compute the return type of ExecuteCombined/WithChannelAccess
+// without requiring a complete Derived::Call type.  Used only in decltype
+// expressions (declared but intentionally never defined).
 template <typename T, auto m0, auto... ms, size_t I0, size_t... Is>
-auto ComputeExecuteCombinedReturnType(
-    Hdl<T> hdl, Valuelist<m0, ms...>, std::index_sequence<I0, Is...>)
+auto ComputeExecuteCombinedReturnType(Hdl<T> hdl, Valuelist<m0, ms...>,
+                                      std::index_sequence<I0, Is...>)
     -> decltype(TrySeq(
         std::declval<AdaptMethod<T, decltype(m0), m0>>()(std::move(hdl)),
         std::declval<AdaptMethod<T, decltype(ms), ms>>()...));
@@ -941,9 +941,9 @@ void ComputeExecuteCombinedReturnType(T* finalize_info);
    public:                                                                    \
     auto name(type x)                                                         \
         -> decltype(ComputeExecuteCombinedReturnType<                         \
-                        typename ForwardOrReverse<                            \
-                            forward, &Filters::Call::name...>::OrderMethod>(  \
-            std::declval<type>())) {                                           \
+                    typename ForwardOrReverse<                                \
+                        forward, &Filters::Call::name...>::OrderMethod>(      \
+            std::declval<type>())) {                                          \
       return ExecuteCombined<typename ForwardOrReverse<                       \
           forward, &Filters::Call::name...>::OrderMethod>(                    \
           static_cast<typename Derived::Call*>(this), std::move(x));          \
@@ -954,9 +954,9 @@ void ComputeExecuteCombinedReturnType(T* finalize_info);
    public:                                                                    \
     auto name(type x, Derived* channel)                                       \
         -> decltype(ComputeExecuteCombinedReturnType<                         \
-                        typename ForwardOrReverse<                            \
-                            forward, &Filters::Call::name...>::OrderMethod>(  \
-            std::declval<type>())) {                                           \
+                    typename ForwardOrReverse<                                \
+                        forward, &Filters::Call::name...>::OrderMethod>(      \
+            std::declval<type>())) {                                          \
       return ExecuteCombinedWithChannelAccess<                                \
           typename ForwardOrReverse<forward,                                  \
                                     &Filters::Call::name...>::OrderMethod,    \
