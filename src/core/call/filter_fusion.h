@@ -908,6 +908,26 @@ void ExecuteCombined(Call* call, T* call_final_info) {
                             typename FilterMethods::Idxs());
 }
 
+// Helpers to compute the return type of ExecuteCombined/WithChannelAccess without
+// requiring a complete Derived::Call type.  Used only in decltype expressions
+// (declared but intentionally never defined).
+template <typename T, auto m0, auto... ms, size_t I0, size_t... Is>
+auto ComputeExecuteCombinedReturnType(
+    Hdl<T> hdl, Valuelist<m0, ms...>, std::index_sequence<I0, Is...>)
+    -> decltype(TrySeq(
+        std::declval<AdaptMethod<T, decltype(m0), m0>>()(std::move(hdl)),
+        std::declval<AdaptMethod<T, decltype(ms), ms>>()...));
+
+template <typename FilterMethods, typename T>
+auto ComputeExecuteCombinedReturnType(Hdl<T> hdl)
+    -> decltype(ComputeExecuteCombinedReturnType(
+        std::move(hdl), typename FilterMethods::Methods{},
+        typename FilterMethods::Idxs{}));
+
+// Overload for OnFinalize (T* instead of Hdl<T>): return type is always void.
+template <typename FilterMethods, typename T>
+void ComputeExecuteCombinedReturnType(T* finalize_info);
+
 #define GRPC_FUSE_METHOD(name, type, forward)                                 \
   template <MethodVariant variant, typename Derived, typename... Filters>     \
   class FuseImpl##name;                                                       \
@@ -919,7 +939,11 @@ void ExecuteCombined(Call* call, T* call_final_info) {
   template <typename Derived, typename... Filters>                            \
   class FuseImpl##name<MethodVariant::kSimple, Derived, Filters...> {         \
    public:                                                                    \
-    auto name(type x) {                                                       \
+    auto name(type x)                                                         \
+        -> decltype(ComputeExecuteCombinedReturnType<                         \
+                        typename ForwardOrReverse<                            \
+                            forward, &Filters::Call::name...>::OrderMethod>(  \
+            std::declval<type>())) {                                           \
       return ExecuteCombined<typename ForwardOrReverse<                       \
           forward, &Filters::Call::name...>::OrderMethod>(                    \
           static_cast<typename Derived::Call*>(this), std::move(x));          \
@@ -928,7 +952,11 @@ void ExecuteCombined(Call* call, T* call_final_info) {
   template <typename Derived, typename... Filters>                            \
   class FuseImpl##name<MethodVariant::kChannelAccess, Derived, Filters...> {  \
    public:                                                                    \
-    auto name(type x, Derived* channel) {                                     \
+    auto name(type x, Derived* channel)                                       \
+        -> decltype(ComputeExecuteCombinedReturnType<                         \
+                        typename ForwardOrReverse<                            \
+                            forward, &Filters::Call::name...>::OrderMethod>(  \
+            std::declval<type>())) {                                           \
       return ExecuteCombinedWithChannelAccess<                                \
           typename ForwardOrReverse<forward,                                  \
                                     &Filters::Call::name...>::OrderMethod,    \
