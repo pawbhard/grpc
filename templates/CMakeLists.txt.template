@@ -24,6 +24,12 @@
   <%
   import re
 
+  # TODO(bpawan): Remove this helper and use str.removeprefix directly once Python 3.9+ is required.
+  def removeprefix(text, prefix):
+    if text.startswith(prefix):
+      return text[len(prefix):]
+    return text
+
   proto_re = re.compile('(.*)\\.proto')
   lib_map = {lib.name: lib for lib in libs}
 
@@ -37,7 +43,7 @@
     for lib in external_proto_libraries:
       if path.startswith(lib.proto_prefix):
         path = path[len(lib.proto_prefix):]
-        path = path.removeprefix(lib.strip_path_prefix)
+        path = removeprefix(path, lib.strip_path_prefix)
         break
     return path
 
@@ -516,7 +522,7 @@
     # Download the archive via HTTP, validate the checksum, and extract to ${external_proto_library.destination}.
     download_archive(
       <%text>${CMAKE_CURRENT_SOURCE_DIR}</%text>/${external_proto_library.destination}
-      https://storage.googleapis.com/grpc-bazel-mirror/${download_url.removeprefix("https://")}
+      https://storage.googleapis.com/grpc-bazel-mirror/${removeprefix(download_url, "https://")}
       ${download_url}
       ${external_proto_library.hash}
       ${external_proto_library.strip_prefix}
