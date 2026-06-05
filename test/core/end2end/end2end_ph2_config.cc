@@ -47,8 +47,7 @@ class Ph2InsecureFixture : public InsecureFixture {
  public:
   explicit Ph2InsecureFixture(bool enable_retry) : enable_retry_(enable_retry) {
     // At Least one of the 2 peers MUST be a PH2
-    GRPC_DCHECK(IsPromiseBasedHttp2ClientTransportEnabled() ||
-                IsPromiseBasedHttp2ServerTransportEnabled());
+    GRPC_DCHECK(IsPh2Test());
   }
 
   ChannelArgs MutateClientArgs(ChannelArgs args) override {
@@ -82,17 +81,8 @@ class Ph2InsecureFixture : public InsecureFixture {
   "|RetryTests.CancelDuringDelay"                            \
   "|CoreEnd2endTests.CancelAfterAccept"
 
-#define LARGE_METADATA_SUITE                                                   \
-  "|Http2SingleHopTests.RequestWithLargeMetadataUnderSoftLimit"                \
-  "|Http2SingleHopTests.RequestWithLargeMetadataBetweenSoftAndHardLimits"      \
-  "|Http2SingleHopTests.RequestWithLargeMetadataAboveHardLimit"                \
-  "|Http2SingleHopTests.RequestWithLargeMetadataSoftLimitAboveHardLimit"       \
-  "|Http2SingleHopTests.RequestWithLargeMetadataSoftLimitOverridesDefaultHard" \
-  "|Http2SingleHopTests.RequestWithLargeMetadataHardLimitOverridesDefaultSoft" \
-  "|Http2SingleHopTests.RequestWithLargeMetadataHardLimitBelowDefaultHard"     \
-  "|Http2SingleHopTests.RequestWithLargeMetadataSoftLimitBelowDefaultSoft"
-
 #define GRPC_HTTP2_PROMISE_CLIENT_TRANSPORT_AVOID_LIST       \
+  "|Http2SingleHopTests.KeepaliveTimeout"                    \
   "|Http2SingleHopTests.MaxConcurrentStreams"                \
   "|Http2SingleHopTests.MaxConcurrentStreamsTimeoutOnFirst"  \
   "|Http2SingleHopTests.MaxConcurrentStreamsTimeoutOnSecond" \
@@ -109,8 +99,7 @@ class Ph2InsecureFixture : public InsecureFixture {
 
 std::vector<CoreTestConfiguration> End2endTestConfigs() {
   std::vector<CoreTestConfiguration> list_of_configs;
-  if (IsExperimentEnabled(
-          ExperimentIds::kExperimentIdPromiseBasedHttp2ClientTransport)) {
+  if (IsExperimentEnabled(ExperimentIds::kExperimentIdPh2Client)) {
     std::vector<CoreTestConfiguration> skip_windows_configs;
     // TODO(tjagtap) : [PH2][P3] : Add configs for
     // 1. CHTTP2 Client vs PH2 server

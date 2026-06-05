@@ -19,8 +19,9 @@ if test "$PHP_GRPC" != "no"; then
 
   LIBS="-lpthread $LIBS"
 
-  CFLAGS="-std=c11 -g -O2"
-  CXXFLAGS="-std=c++17 -fno-exceptions -fno-rtti -g -O2"
+  dnl -Wno-error=attributes needed by UPB https://github.com/grpc/grpc/issues/42192
+  CFLAGS="-std=c11 -g -O2 -Wno-error=attributes"
+  CXXFLAGS="-std=c++17 -fno-exceptions -fno-rtti -g -O2 -Wno-error=attributes"
   GRPC_SHARED_LIBADD="-lpthread $GRPC_SHARED_LIBADD"
   PHP_REQUIRE_CXX()
   PHP_ADD_LIBRARY(pthread)
@@ -152,9 +153,7 @@ if test "$PHP_GRPC" != "no"; then
     src/core/ext/filters/channel_idle/idle_filter_state.cc \
     src/core/ext/filters/channel_idle/legacy_channel_idle_filter.cc \
     src/core/ext/filters/fault_injection/fault_injection_filter.cc \
-    src/core/ext/filters/fault_injection/fault_injection_service_config_parser.cc \
     src/core/ext/filters/gcp_authentication/gcp_authentication_filter.cc \
-    src/core/ext/filters/gcp_authentication/gcp_authentication_service_config_parser.cc \
     src/core/ext/filters/http/client/http_client_filter.cc \
     src/core/ext/filters/http/client_authority_filter.cc \
     src/core/ext/filters/http/http_filters_plugin.cc \
@@ -164,7 +163,6 @@ if test "$PHP_GRPC" != "no"; then
     src/core/ext/filters/rbac/rbac_filter.cc \
     src/core/ext/filters/rbac/rbac_service_config_parser.cc \
     src/core/ext/filters/stateful_session/stateful_session_filter.cc \
-    src/core/ext/filters/stateful_session/stateful_session_service_config_parser.cc \
     src/core/ext/transport/chttp2/alpn/alpn.cc \
     src/core/ext/transport/chttp2/chttp2_plugin.cc \
     src/core/ext/transport/chttp2/client/chttp2_connector.cc \
@@ -190,6 +188,7 @@ if test "$PHP_GRPC" != "no"; then
     src/core/ext/transport/chttp2/transport/hpack_parser.cc \
     src/core/ext/transport/chttp2/transport/hpack_parser_table.cc \
     src/core/ext/transport/chttp2/transport/http2_client_transport.cc \
+    src/core/ext/transport/chttp2/transport/http2_server_transport.cc \
     src/core/ext/transport/chttp2/transport/http2_settings.cc \
     src/core/ext/transport/chttp2/transport/http2_settings_manager.cc \
     src/core/ext/transport/chttp2/transport/http2_stats_collector.cc \
@@ -279,7 +278,10 @@ if test "$PHP_GRPC" != "no"; then
     src/core/ext/upb-gen/envoy/config/trace/v3/zipkin.upb_minitable.c \
     src/core/ext/upb-gen/envoy/data/accesslog/v3/accesslog.upb_minitable.c \
     src/core/ext/upb-gen/envoy/extensions/clusters/aggregate/v3/cluster.upb_minitable.c \
+    src/core/ext/upb-gen/envoy/extensions/common/matching/v3/extension_matcher.upb_minitable.c \
     src/core/ext/upb-gen/envoy/extensions/filters/common/fault/v3/fault.upb_minitable.c \
+    src/core/ext/upb-gen/envoy/extensions/filters/common/matcher/action/v3/skip_action.upb_minitable.c \
+    src/core/ext/upb-gen/envoy/extensions/filters/http/composite/v3/composite.upb_minitable.c \
     src/core/ext/upb-gen/envoy/extensions/filters/http/fault/v3/fault.upb_minitable.c \
     src/core/ext/upb-gen/envoy/extensions/filters/http/gcp_authn/v3/gcp_authn.upb_minitable.c \
     src/core/ext/upb-gen/envoy/extensions/filters/http/rbac/v3/rbac.upb_minitable.c \
@@ -458,7 +460,10 @@ if test "$PHP_GRPC" != "no"; then
     src/core/ext/upbdefs-gen/envoy/config/trace/v3/zipkin.upbdefs.c \
     src/core/ext/upbdefs-gen/envoy/data/accesslog/v3/accesslog.upbdefs.c \
     src/core/ext/upbdefs-gen/envoy/extensions/clusters/aggregate/v3/cluster.upbdefs.c \
+    src/core/ext/upbdefs-gen/envoy/extensions/common/matching/v3/extension_matcher.upbdefs.c \
     src/core/ext/upbdefs-gen/envoy/extensions/filters/common/fault/v3/fault.upbdefs.c \
+    src/core/ext/upbdefs-gen/envoy/extensions/filters/common/matcher/action/v3/skip_action.upbdefs.c \
+    src/core/ext/upbdefs-gen/envoy/extensions/filters/http/composite/v3/composite.upbdefs.c \
     src/core/ext/upbdefs-gen/envoy/extensions/filters/http/fault/v3/fault.upbdefs.c \
     src/core/ext/upbdefs-gen/envoy/extensions/filters/http/gcp_authn/v3/gcp_authn.upbdefs.c \
     src/core/ext/upbdefs-gen/envoy/extensions/filters/http/rbac/v3/rbac.upbdefs.c \
@@ -554,6 +559,7 @@ if test "$PHP_GRPC" != "no"; then
     src/core/filter/auth/client_auth_filter.cc \
     src/core/filter/auth/server_auth_filter.cc \
     src/core/filter/blackboard.cc \
+    src/core/filter/composite/composite_filter.cc \
     src/core/filter/fused_filters.cc \
     src/core/handshaker/endpoint_info/endpoint_info_handshaker.cc \
     src/core/handshaker/handshaker.cc \
@@ -818,6 +824,7 @@ if test "$PHP_GRPC" != "no"; then
     src/core/server/server_config_selector_filter.cc \
     src/core/server/xds_channel_stack_modifier.cc \
     src/core/server/xds_server_config_fetcher.cc \
+    src/core/server/xds_server_config_fetcher_legacy.cc \
     src/core/service_config/service_config_channel_arg_filter.cc \
     src/core/service_config/service_config_impl.cc \
     src/core/service_config/service_config_parser.cc \
@@ -832,6 +839,8 @@ if test "$PHP_GRPC" != "no"; then
     src/core/telemetry/tcp_tracer.cc \
     src/core/transport/auth_context.cc \
     src/core/transport/endpoint_transport_client_channel_factory.cc \
+    src/core/transport/message_size_service_config.cc \
+    src/core/transport/session_endpoint.cc \
     src/core/tsi/alts/crypt/aes_gcm.cc \
     src/core/tsi/alts/crypt/gsec.cc \
     src/core/tsi/alts/frame_protector/alts_counter.cc \
@@ -948,6 +957,7 @@ if test "$PHP_GRPC" != "no"; then
     src/core/xds/grpc/xds_endpoint.cc \
     src/core/xds/grpc/xds_endpoint_parser.cc \
     src/core/xds/grpc/xds_health_status.cc \
+    src/core/xds/grpc/xds_http_composite_filter.cc \
     src/core/xds/grpc/xds_http_fault_filter.cc \
     src/core/xds/grpc/xds_http_filter.cc \
     src/core/xds/grpc/xds_http_filter_registry.cc \
@@ -1456,6 +1466,7 @@ if test "$PHP_GRPC" != "no"; then
     third_party/upb/upb/mini_descriptor/internal/encode.c \
     third_party/upb/upb/mini_descriptor/link.c \
     third_party/upb/upb/mini_table/extension_registry.c \
+    third_party/upb/upb/mini_table/generated_registry.c \
     third_party/upb/upb/mini_table/internal/message.c \
     third_party/upb/upb/mini_table/message.c \
     third_party/upb/upb/reflection/def_pool.c \
@@ -1478,9 +1489,10 @@ if test "$PHP_GRPC" != "no"; then
     third_party/upb/upb/text/encode.c \
     third_party/upb/upb/text/internal/encode.c \
     third_party/upb/upb/wire/decode.c \
+    third_party/upb/upb/wire/decode_fast/select.c \
     third_party/upb/upb/wire/encode.c \
     third_party/upb/upb/wire/eps_copy_input_stream.c \
-    third_party/upb/upb/wire/internal/decode_fast.c \
+    third_party/upb/upb/wire/internal/decoder.c \
     third_party/upb/upb/wire/reader.c \
     third_party/utf8_range/utf8_range.c \
     , $ext_shared, , -fvisibility=hidden \
@@ -1488,7 +1500,7 @@ if test "$PHP_GRPC" != "no"; then
     -D_HAS_EXCEPTIONS=0 -DNOMINMAX -DGRPC_ARES=0 \
     -DGRPC_POSIX_FORK_ALLOW_PTHREAD_ATFORK=1 \
     -DGRPC_XDS_USER_AGENT_NAME_SUFFIX='"\"PHP\""' \
-    -DGRPC_XDS_USER_AGENT_VERSION_SUFFIX='"\"1.81.0dev\""')
+    -DGRPC_XDS_USER_AGENT_VERSION_SUFFIX='"\"1.82.0dev\""')
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/call)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/channelz)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/channelz/v2tov1)
@@ -1551,7 +1563,10 @@ if test "$PHP_GRPC" != "no"; then
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upb-gen/envoy/config/trace/v3)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upb-gen/envoy/data/accesslog/v3)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upb-gen/envoy/extensions/clusters/aggregate/v3)
+  PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upb-gen/envoy/extensions/common/matching/v3)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upb-gen/envoy/extensions/filters/common/fault/v3)
+  PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upb-gen/envoy/extensions/filters/common/matcher/action/v3)
+  PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upb-gen/envoy/extensions/filters/http/composite/v3)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upb-gen/envoy/extensions/filters/http/fault/v3)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upb-gen/envoy/extensions/filters/http/gcp_authn/v3)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upb-gen/envoy/extensions/filters/http/rbac/v3)
@@ -1615,7 +1630,10 @@ if test "$PHP_GRPC" != "no"; then
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upbdefs-gen/envoy/config/trace/v3)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upbdefs-gen/envoy/data/accesslog/v3)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upbdefs-gen/envoy/extensions/clusters/aggregate/v3)
+  PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upbdefs-gen/envoy/extensions/common/matching/v3)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upbdefs-gen/envoy/extensions/filters/common/fault/v3)
+  PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upbdefs-gen/envoy/extensions/filters/common/matcher/action/v3)
+  PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upbdefs-gen/envoy/extensions/filters/http/composite/v3)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upbdefs-gen/envoy/extensions/filters/http/fault/v3)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upbdefs-gen/envoy/extensions/filters/http/gcp_authn/v3)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upbdefs-gen/envoy/extensions/filters/http/rbac/v3)
@@ -1649,6 +1667,7 @@ if test "$PHP_GRPC" != "no"; then
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upbdefs-gen/xds/type/v3)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/filter)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/filter/auth)
+  PHP_ADD_BUILD_DIR($ext_builddir/src/core/filter/composite)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/handshaker)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/handshaker/endpoint_info)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/handshaker/http_connect)
@@ -1814,6 +1833,7 @@ if test "$PHP_GRPC" != "no"; then
   PHP_ADD_BUILD_DIR($ext_builddir/third_party/upb/upb/text)
   PHP_ADD_BUILD_DIR($ext_builddir/third_party/upb/upb/text/internal)
   PHP_ADD_BUILD_DIR($ext_builddir/third_party/upb/upb/wire)
+  PHP_ADD_BUILD_DIR($ext_builddir/third_party/upb/upb/wire/decode_fast)
   PHP_ADD_BUILD_DIR($ext_builddir/third_party/upb/upb/wire/internal)
   PHP_ADD_BUILD_DIR($ext_builddir/third_party/utf8_range)
 fi
