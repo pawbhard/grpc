@@ -20,21 +20,21 @@
 //      metadata through its interceptor) and mutates every server->client
 //      message.
 //   2. While initial metadata is stalled, the transport delivers a message.
-//      ClientCallData correctly parks the message (AllowRecvMessage() == false),
-//      so it is NOT yet pushed through the filter's message interceptor.
+//      ClientCallData correctly parks the message (AllowRecvMessage() ==
+//      false), so it is NOT yet pushed through the filter's message
+//      interceptor.
 //   3. The transport then delivers trailing metadata. This drives
 //      ClientCallData::ReceiveMessage::Done(), moving the parked message to the
-//      kCompletedWhileBatchCompleted state, whose handler closes the interceptor
-//      pipe and delivers the *raw* buffered message straight to the application.
+//      kCompletedWhileBatchCompleted state, whose handler closes the
+//      interceptor pipe and delivers the *raw* buffered message straight to the
+//      application.
 //
 // The bug: the message bypasses the filter's mutation interceptor entirely. The
 // application receives the un-mutated payload.
 //
-// This test asserts the *correct* behavior (the message should be mutated by the
-// filter), so it FAILS on the current code, demonstrating the bug. It should
-// pass once the bypass is fixed.
-
-#include "src/core/lib/channel/promise_based_filter.h"
+// This test asserts the *correct* behavior (the message should be mutated by
+// the filter), so it FAILS on the current code, demonstrating the bug. It
+// should pass once the bypass is fixed.
 
 #include <grpc/grpc.h>
 #include <grpc/status.h>
@@ -52,6 +52,7 @@
 #include "src/core/lib/channel/channel_args.h"
 #include "src/core/lib/channel/channel_args_preconditioning.h"
 #include "src/core/lib/channel/channel_stack.h"
+#include "src/core/lib/channel/promise_based_filter.h"
 #include "src/core/lib/iomgr/call_combiner.h"
 #include "src/core/lib/iomgr/closure.h"
 #include "src/core/lib/iomgr/exec_ctx.h"
@@ -119,11 +120,9 @@ class StallInitialMetadataMutateMessageFilter final : public ChannelFilter {
   }
 };
 
-const grpc_channel_filter kStallFilter =
-    MakePromiseBasedFilter<StallInitialMetadataMutateMessageFilter,
-                           FilterEndpoint::kClient,
-                           kFilterExaminesServerInitialMetadata |
-                               kFilterExaminesInboundMessages>();
+const grpc_channel_filter kStallFilter = MakePromiseBasedFilter<
+    StallInitialMetadataMutateMessageFilter, FilterEndpoint::kClient,
+    kFilterExaminesServerInitialMetadata | kFilterExaminesInboundMessages>();
 
 // A minimal terminating "transport" filter that captures the recv closures /
 // payload pointers that ClientCallData forwards down, so the test can complete
@@ -144,8 +143,7 @@ struct MockTransport {
 
 MockTransport* g_mock = nullptr;
 
-void MockStartBatch(grpc_call_element*,
-                    grpc_transport_stream_op_batch* op) {
+void MockStartBatch(grpc_call_element*, grpc_transport_stream_op_batch* op) {
   MockTransport* m = g_mock;
   if (op->recv_initial_metadata) {
     m->recv_initial_metadata =
@@ -403,9 +401,9 @@ void RunStalledMessageScenario(grpc_status_code trailing_status) {
   recv_trail_md.Set(GrpcStatusMetadata(), trailing_status);
   run_on_combiner(mock.recv_trailing_metadata_ready);
 
-  // With the fix, the buffered message stays parked: it has not yet gone through
-  // the filter's interceptor, so it must NOT have been delivered. (With the bug,
-  // it would already have been delivered raw here.)
+  // With the fix, the buffered message stays parked: it has not yet gone
+  // through the filter's interceptor, so it must NOT have been delivered. (With
+  // the bug, it would already have been delivered raw here.)
   EXPECT_FALSE(app.msg_ready_called)
       << "message delivered before passing through the filter interceptor "
          "(bypass bug)";
