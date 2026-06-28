@@ -861,8 +861,8 @@ void BaseCallData::ReceiveMessage::Done(const ServerMetadata& metadata,
     case State::kBatchCompleted:
       // An in-band completion (trailing metadata with any status, OK or not)
       // keeps the buffered message so it can still be flushed through the
-      // filter's message interceptor; only an out-of-band cancellation takes the
-      // raw close-out path. A non-OK status is a normal RPC outcome, not a
+      // filter's message interceptor; only an out-of-band cancellation takes
+      // the raw close-out path. A non-OK status is a normal RPC outcome, not a
       // reason to bypass the filter. See WakeInsideCombiner.
       state_ = (RecvMessageFilterBypassFixEnabled() && is_cancellation)
                    ? State::kBatchCompletedButCancelled
@@ -879,8 +879,8 @@ void BaseCallData::ReceiveMessage::Done(const ServerMetadata& metadata,
       const bool discard =
           RecvMessageFilterBypassFixEnabled()
               ? is_cancellation
-              : metadata.get(GrpcStatusMetadata()).value_or(
-                    GRPC_STATUS_UNKNOWN) != GRPC_STATUS_OK;
+              : metadata.get(GrpcStatusMetadata())
+                        .value_or(GRPC_STATUS_UNKNOWN) != GRPC_STATUS_OK;
       if (!discard) {
         if (state_ == State::kCompletedWhilePulledFromPipe ||
             state_ == State::kPulledFromPipe) {
@@ -955,9 +955,9 @@ void BaseCallData::ReceiveMessage::WakeInsideCombiner(Flusher* flusher,
       }
       // Fix: a cleanly-completed message parked behind not-yet-responded server
       // initial metadata must still be pushed through the filter's message
-      // interceptor. Fall into the kBatchCompleted push handling; because state_
-      // is kCompletedWhileBatchCompleted (not kBatchCompleted), it routes to
-      // kCompletedWhilePushedToPipe.
+      // interceptor. Fall into the kBatchCompleted push handling; because
+      // state_ is kCompletedWhileBatchCompleted (not kBatchCompleted), it
+      // routes to kCompletedWhilePushedToPipe.
       [[fallthrough]];
     case State::kBatchCompleted:
       if (completed_status_.ok() && intercepted_slice_buffer_->has_value()) {
