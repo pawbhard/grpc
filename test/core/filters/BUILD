@@ -93,6 +93,36 @@ grpc_cc_test(
 )
 
 grpc_cc_test(
+    name = "recv_message_filter_bypass_test",
+    srcs = ["recv_message_filter_bypass_test.cc"],
+    external_deps = [
+        "absl/status",
+        "absl/status:statusor",
+        "absl/strings",
+        "gtest",
+    ],
+    deps = [
+        "//:gpr",
+        "//:grpc",
+        "//:grpc_base",
+        "//:grpc_unsecure",
+        "//:ref_counted_ptr",
+        "//src/core:arena",
+        "//src/core:arena_promise",
+        "//src/core:channel_args",
+        "//src/core:channel_args_preconditioning",
+        "//src/core:closure",
+        "//src/core:message",
+        "//src/core:metadata_batch",
+        "//src/core:poll",
+        "//src/core:slice",
+        "//src/core:slice_buffer",
+        "//src/core:status_helper",
+        "//test/core/test_util:grpc_test_util",
+    ],
+)
+
+grpc_cc_test(
     name = "client_auth_filter_test",
     srcs = ["client_auth_filter_test.cc"],
     external_deps = [

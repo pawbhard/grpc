@@ -1843,7 +1843,11 @@ class BaseCallData : public Activity,
     // work.
     void WakeInsideCombiner(Flusher* flusher, bool allow_push_to_pipe);
     // Call is completed, we have trailing metadata. Close things out.
-    void Done(const ServerMetadata& metadata, Flusher* flusher);
+    // is_cancellation distinguishes an out-of-band cancellation (drop in-flight
+    // messages) from an in-band completion (let a received message finish
+    // flowing through the filter interceptor, regardless of trailing status).
+    void Done(const ServerMetadata& metadata, Flusher* flusher,
+              bool is_cancellation = false);
 
     channelz::PropertyList ChannelzProperties() {
       return channelz::PropertyList().Set("state", StateString(state_));

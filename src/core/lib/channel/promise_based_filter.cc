@@ -49,6 +49,14 @@ namespace grpc_core {
 namespace promise_filter_detail {
 
 namespace {
+// When enabled, an inbound message that completed (clean trailing metadata)
+// while parked behind not-yet-responded server initial metadata is flushed
+// through the filter's message interceptor (so filter message hooks run)
+// instead of being delivered raw. When disabled, behavior is identical to the
+// historical (buggy) behavior. See repo-root rootcause.md.
+// Intended to be backed by a gRPC experiment for runtime enable/disable.
+inline bool RecvMessageFilterBypassFixEnabled() { return true; }
+
 class FakeActivity final : public Activity {
  public:
   explicit FakeActivity(Activity* wake_activity)
@@ -831,7 +839,8 @@ void BaseCallData::ReceiveMessage::OnComplete(absl::Status status) {
 }
 
 void BaseCallData::ReceiveMessage::Done(const ServerMetadata& metadata,
-                                        Flusher* flusher) {
+                                        Flusher* flusher,
+                                        bool is_cancellation) {
   GRPC_TRACE_LOG(channel, INFO)
       << base_->LogTag() << " ReceiveMessage.Done st=" << StateString(state_)
       << " md=" << metadata.DebugString();
@@ -850,15 +859,29 @@ void BaseCallData::ReceiveMessage::Done(const ServerMetadata& metadata,
       break;
     case State::kCompletedWhileBatchCompleted:
     case State::kBatchCompleted:
-      state_ = State::kCompletedWhileBatchCompleted;
+      // An in-band completion (trailing metadata with any status, OK or not)
+      // keeps the buffered message so it can still be flushed through the
+      // filter's message interceptor; only an out-of-band cancellation takes the
+      // raw close-out path. A non-OK status is a normal RPC outcome, not a
+      // reason to bypass the filter. See WakeInsideCombiner.
+      state_ = (RecvMessageFilterBypassFixEnabled() && is_cancellation)
+                   ? State::kBatchCompletedButCancelled
+                   : State::kCompletedWhileBatchCompleted;
       break;
     case State::kCompletedWhilePulledFromPipe:
     case State::kCompletedWhilePushedToPipe:
     case State::kPulledFromPipe:
     case State::kPushedToPipe: {
-      auto status_code =
-          metadata.get(GrpcStatusMetadata()).value_or(GRPC_STATUS_UNKNOWN);
-      if (status_code == GRPC_STATUS_OK) {
+      // Discard an in-flight message only on an out-of-band cancellation; an
+      // in-band completion lets it finish flowing through the interceptor. With
+      // the fix disabled, fall back to the legacy rule of discarding on any
+      // non-OK trailing status.
+      const bool discard =
+          RecvMessageFilterBypassFixEnabled()
+              ? is_cancellation
+              : metadata.get(GrpcStatusMetadata()).value_or(
+                    GRPC_STATUS_UNKNOWN) != GRPC_STATUS_OK;
+      if (!discard) {
         if (state_ == State::kCompletedWhilePulledFromPipe ||
             state_ == State::kPulledFromPipe) {
           state_ = State::kCompletedWhilePulledFromPipe;
@@ -910,7 +933,6 @@ void BaseCallData::ReceiveMessage::WakeInsideCombiner(Flusher* flusher,
       state_ = State::kCancelled;
       break;
     case State::kBatchCompletedButCancelled:
-    case State::kCompletedWhileBatchCompleted:
       interceptor()->Push()->Close();
       state_ = State::kCancelled;
       flusher->AddClosure(std::exchange(intercepted_on_complete_, nullptr),
@@ -921,6 +943,22 @@ void BaseCallData::ReceiveMessage::WakeInsideCombiner(Flusher* flusher,
       flusher->AddClosure(std::exchange(intercepted_on_complete_, nullptr),
                           completed_status_, "recv_message");
       break;
+    case State::kCompletedWhileBatchCompleted:
+      if (!RecvMessageFilterBypassFixEnabled()) {
+        // Legacy (buggy) behavior: deliver the buffered message raw, bypassing
+        // the filter's message interceptor.
+        interceptor()->Push()->Close();
+        state_ = State::kCancelled;
+        flusher->AddClosure(std::exchange(intercepted_on_complete_, nullptr),
+                            completed_status_, "recv_message");
+        break;
+      }
+      // Fix: a cleanly-completed message parked behind not-yet-responded server
+      // initial metadata must still be pushed through the filter's message
+      // interceptor. Fall into the kBatchCompleted push handling; because state_
+      // is kCompletedWhileBatchCompleted (not kBatchCompleted), it routes to
+      // kCompletedWhilePushedToPipe.
+      [[fallthrough]];
     case State::kBatchCompleted:
       if (completed_status_.ok() && intercepted_slice_buffer_->has_value()) {
         if (!allow_push_to_pipe) break;
@@ -1645,7 +1683,8 @@ void ClientCallData::Cancel(grpc_error_handle error, Flusher* flusher) {
     send_message()->Done(*ServerMetadataFromStatus(error), flusher);
   }
   if (receive_message() != nullptr) {
-    receive_message()->Done(*ServerMetadataFromStatus(error), flusher);
+    receive_message()->Done(*ServerMetadataFromStatus(error), flusher,
+                            /*is_cancellation=*/true);
   }
 }
 
@@ -2212,9 +2251,11 @@ void ServerCallData::StartBatch(grpc_transport_stream_op_batch* b) {
             batch->payload->send_trailing_metadata.send_trailing_metadata
                     ->get(GrpcStatusMetadata())
                     .value_or(GRPC_STATUS_UNKNOWN) != GRPC_STATUS_OK) {
+          // Server is finishing the call with a non-OK status before consuming
+          // the inbound stream: abandon any in-flight client->server message.
           receive_message()->Done(
               *batch->payload->send_trailing_metadata.send_trailing_metadata,
-              &flusher);
+              &flusher, /*is_cancellation=*/true);
         }
         if (send_message() != nullptr && !send_message()->IsIdle()) {
           send_trailing_state_ = SendTrailingState::kQueuedBehindSendMessage;
@@ -2317,7 +2358,8 @@ void ServerCallData::Completed(grpc_error_handle error,
     send_message()->Done(*ServerMetadataFromStatus(error), flusher);
   }
   if (receive_message() != nullptr) {
-    receive_message()->Done(*ServerMetadataFromStatus(error), flusher);
+    receive_message()->Done(*ServerMetadataFromStatus(error), flusher,
+                            /*is_cancellation=*/true);
   }
 }
 
