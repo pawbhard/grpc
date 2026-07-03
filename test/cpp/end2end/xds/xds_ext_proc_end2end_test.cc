@@ -740,15 +740,7 @@ void XdsExtProcEnd2endTest::RunProcessingModeTest(bool req_hdrs, bool resp_hdrs,
       SendRpcGetTrailers(rpc_options, &response, &server_initial_metadata,
                          &server_trailing_metadata);
   EXPECT_TRUE(status.ok()) << "RPC failed: " << status.error_message();
-  // NOTE: In both normal and observability modes, if response headers (initial
-  // metadata) are enabled, the filter blocks/delays the call progression to
-  // write them. Due to transport-level coalescing, this delay causes the
-  // subsequent response body in the same coalesced batch to be dropped by the
-  // transport before the message loop can pull it. This is a known limitation.
-  bool expect_response_body = resp_body;
-  if (resp_hdrs && resp_body) {
-    expect_response_body = false;
-  }
+
   // Wait for expected counts (especially important for async observability
   // mode)
   MockExternalProcessorService::RequestCounts expected_counts;
@@ -756,7 +748,7 @@ void XdsExtProcEnd2endTest::RunProcessingModeTest(bool req_hdrs, bool resp_hdrs,
   expected_counts.response_headers = resp_hdrs ? 1 : 0;
   expected_counts.response_trailers = resp_trls ? 1 : 0;
   expected_counts.request_body = req_body ? 1 : 0;
-  expected_counts.response_body = expect_response_body ? 1 : 0;
+  expected_counts.response_body = resp_body ? 1 : 0;
   ext_proc_server_->ext_proc_service()->WaitForRequestCounts(expected_counts);
   auto counts = ext_proc_server_->ext_proc_service()->GetRequestCounts();
   EXPECT_EQ(counts.request_headers, req_hdrs ? 1 : 0);
@@ -767,7 +759,7 @@ void XdsExtProcEnd2endTest::RunProcessingModeTest(bool req_hdrs, bool resp_hdrs,
   } else {
     EXPECT_EQ(counts.request_body, 0);
   }
-  EXPECT_EQ(counts.response_body, expect_response_body ? 1 : 0);
+  EXPECT_EQ(counts.response_body, resp_body ? 1 : 0);
   // Verify mutations
   if (!observability_mode && req_hdrs) {
     auto it = server_initial_metadata.find("x-extproc-request-headers-mutated");
@@ -802,13 +794,13 @@ void XdsExtProcEnd2endTest::RunProcessingModeTest(bool req_hdrs, bool resp_hdrs,
     if (req_body) {
       absl::StrAppend(&expected_message, "-request-body-mutated");
     }
-    if (expect_response_body) {
+    if (resp_body) {
       absl::StrAppend(&expected_message, "-response-body-mutated");
     }
   }
   EXPECT_EQ(response.message(), expected_message);
   bool any_mode_enabled =
-      req_hdrs || resp_hdrs || resp_trls || req_body || expect_response_body;
+      req_hdrs || resp_hdrs || resp_trls || req_body || resp_body;
   EXPECT_EQ(ext_proc_server_->ext_proc_service()->num_calls(),
             any_mode_enabled ? 1 : 0);
 }
@@ -7180,6 +7172,7 @@ int main(int argc, char** argv) {
   overrides.client_channel_backup_poll_interval_ms = 1;
   grpc_core::ConfigVars::SetOverrides(overrides);
   grpc_core::ForceEnableExperiment("v2_non_owning_waker_implementation", true);
+  grpc_core::ForceEnableExperiment("recv_message_filter_bypass_fix", true);
   grpc_init();
   const auto result = RUN_ALL_TESTS();
   grpc_shutdown();

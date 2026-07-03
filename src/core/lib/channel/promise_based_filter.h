@@ -1846,7 +1846,10 @@ class BaseCallData : public Activity,
     // work.
     void WakeInsideCombiner(Flusher* flusher, bool allow_push_to_pipe);
     // Call is completed, we have trailing metadata. Close things out.
-    void Done(const ServerMetadata& metadata, Flusher* flusher);
+    // is_cancelled distinguishes an out-of-band cancellation.
+    void Done(const ServerMetadata& metadata, Flusher* flusher,
+              bool is_cancelled = false);
+    bool IsIdle() const;
 
     channelz::PropertyList ChannelzProperties() {
       return channelz::PropertyList().Set("state", StateString(state_));
@@ -2005,6 +2008,9 @@ class ClientCallData : public BaseCallData {
     kQueued,
     // We've forwarded the op to the next filter.
     kForwarded,
+    // Trailing metadata is received, but we queue it until the in-progress
+    // receive message operation finishes.
+    kQueuedBehindReceiveMessage,
     // The op has completed from below, but we haven't yet forwarded it up
     // (the promise gets to interject and mutate it).
     kComplete,
