@@ -18,6 +18,8 @@
 // OnClientToServerMessage; the client observes RESOURCE_EXHAUSTED rather than a
 // normal completion.
 
+#include "src/core/ext/filters/message_size/message_size_filter.h"
+
 #include <grpc/impl/channel_arg_names.h>
 #include <grpc/status.h>
 
@@ -25,7 +27,6 @@
 
 #include "src/core/call/message.h"
 #include "src/core/call/metadata.h"
-#include "src/core/ext/filters/message_size/message_size_filter.h"
 #include "src/core/lib/channel/channel_args.h"
 #include "src/core/lib/promise/status_flag.h"
 #include "src/core/lib/resource_quota/arena.h"
@@ -46,11 +47,13 @@ FILTER_TEST_V3(WithinLimitPasses) {
           .Build(ChannelArgs().Set(GRPC_ARG_MAX_RECEIVE_MESSAGE_LENGTH, 1024))
           .ok());
 
-  auto [initiator, handler] = StartCall(Arena::MakePooledForOverwrite<ClientMetadata>());
+  auto [initiator, handler] =
+      StartCall(Arena::MakePooledForOverwrite<ClientMetadata>());
   SpawnTestSeq(
       initiator, "client",
       [initiator = initiator]() mutable {
-        return initiator.PushMessage(Arena::MakePooled<Message>(SliceBuffer(Slice::FromCopiedString("small")), 0));
+        return initiator.PushMessage(Arena::MakePooled<Message>(
+            SliceBuffer(Slice::FromCopiedString("small")), 0));
       },
       [initiator = initiator](StatusFlag ok) mutable {
         EXPECT_TRUE(ok.ok());
@@ -75,7 +78,9 @@ FILTER_TEST_V3(WithinLimitPasses) {
 
   SpawnTestSeq(
       handler, "server",
-      [handler = handler]() mutable { return handler.PullClientInitialMetadata(); },
+      [handler = handler]() mutable {
+        return handler.PullClientInitialMetadata();
+      },
       [handler = handler](ValueOrFailure<ClientMetadataHandle> md) mutable {
         EXPECT_TRUE(md.ok());
         return handler.PullMessage();
@@ -84,7 +89,8 @@ FILTER_TEST_V3(WithinLimitPasses) {
         EXPECT_TRUE(msg.ok());
         EXPECT_TRUE(msg.has_value());
         EXPECT_THAT(msg.value(), HasMessagePayload("small"));
-        return handler.PushServerInitialMetadata(Arena::MakePooledForOverwrite<ServerMetadata>());
+        return handler.PushServerInitialMetadata(
+            Arena::MakePooledForOverwrite<ServerMetadata>());
       },
       [handler = handler](StatusFlag ok) mutable {
         EXPECT_TRUE(ok.ok());
