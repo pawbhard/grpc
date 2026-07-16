@@ -39,8 +39,8 @@
 //   CallInitiator (client)  <->  CallFilters::Stack  <->  CallHandler (server)
 //
 // The stack is assembled with `CallFilters::StackBuilder` and attached directly
-// to a real call spine, so the six call lifecycle hooks fire through the genuine
-// CallFilters / CallSpine executor, exactly as they do in production.
+// to a real call spine, so the six call lifecycle hooks fire through the
+// genuine CallFilters / CallSpine executor, exactly as they do in production.
 //
 // Because it is built on the yodel harness, every FILTER_TEST_V3 is also a
 // fuzz target: the FuzzingEventEngine perturbs scheduling, message sizes, and
