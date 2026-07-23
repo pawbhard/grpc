@@ -25,11 +25,11 @@
 #include <utility>
 #include <vector>
 
+#include "src/core/util/shared_bit_gen.h"
 #include "absl/random/distributions.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
-#include "src/core/util/shared_bit_gen.h"
 
 namespace grpc_core {
 
@@ -67,11 +67,12 @@ LoadBalancingPolicy::PickResult SlicerPicker::Pick(PickArgs args) {
   // been received from the sharding service).
   if (slice == nullptr) {
     if (fallback_enabled_) return PickFromFallbackPool(args);
-    return PickResult::Fail(absl::UnavailableError(
-        "slicer: no slice assignment for request key"));
+    return PickResult::Fail(
+        absl::UnavailableError("slicer: no slice assignment for request key"));
   }
   // The matching slice is in fallback mode.
-  if (slice->in_fallback && fallback_enabled_) return PickFromFallbackPool(args);
+  if (slice->in_fallback && fallback_enabled_)
+    return PickFromFallbackPool(args);
   return PickFromSlice(*slice, args);
 }
 

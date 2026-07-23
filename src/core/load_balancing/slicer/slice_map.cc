@@ -22,8 +22,8 @@
 #include <cstddef>
 #include <utility>
 
-#include "absl/strings/str_cat.h"
 #include "src/core/util/ref_counted_ptr.h"
+#include "absl/strings/str_cat.h"
 
 namespace grpc_core {
 

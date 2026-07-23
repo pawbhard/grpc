@@ -21,11 +21,11 @@
 #include <string>
 #include <vector>
 
-#include "absl/status/status.h"
-#include "absl/strings/string_view.h"
+#include "src/core/util/ref_counted_ptr.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "src/core/util/ref_counted_ptr.h"
+#include "absl/status/status.h"
+#include "absl/strings/string_view.h"
 
 namespace grpc_core {
 namespace {
@@ -76,8 +76,9 @@ TEST(SliceMapTest, TotalFallbackWhenNoAssignment) {
   EXPECT_EQ((*slice_map)->Lookup(""), nullptr);
   EXPECT_EQ((*slice_map)->Lookup("anything"), nullptr);
   // The fallback pool is every endpoint.
-  EXPECT_THAT(AllStates(**slice_map),
-              UnorderedElementsAre(GRPC_CHANNEL_READY, GRPC_CHANNEL_CONNECTING));
+  EXPECT_THAT(
+      AllStates(**slice_map),
+      UnorderedElementsAre(GRPC_CHANNEL_READY, GRPC_CHANNEL_CONNECTING));
   EXPECT_EQ((*slice_map)->generation(), 0);
 }
 
@@ -155,8 +156,9 @@ TEST(SliceMapTest, EndpointsBucketedByState) {
               UnorderedElementsAre(GRPC_CHANNEL_READY, GRPC_CHANNEL_READY));
   EXPECT_THAT(StatesInBucket(**slice_map, slice, GRPC_CHANNEL_CONNECTING),
               UnorderedElementsAre(GRPC_CHANNEL_CONNECTING));
-  EXPECT_THAT(StatesInBucket(**slice_map, slice, GRPC_CHANNEL_TRANSIENT_FAILURE),
-              UnorderedElementsAre(GRPC_CHANNEL_TRANSIENT_FAILURE));
+  EXPECT_THAT(
+      StatesInBucket(**slice_map, slice, GRPC_CHANNEL_TRANSIENT_FAILURE),
+      UnorderedElementsAre(GRPC_CHANNEL_TRANSIENT_FAILURE));
   EXPECT_TRUE(slice.endpoints_by_state[GRPC_CHANNEL_IDLE].empty());
   EXPECT_FALSE(slice.in_fallback);
 }
