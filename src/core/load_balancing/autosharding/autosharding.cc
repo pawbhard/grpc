@@ -42,14 +42,6 @@
 #include <utility>
 #include <vector>
 
-#include "absl/algorithm/container.h"
-#include "absl/container/flat_hash_map.h"
-#include "absl/random/random.h"
-#include "absl/status/status.h"
-#include "absl/status/statusor.h"
-#include "absl/strings/str_cat.h"
-#include "absl/strings/str_join.h"
-#include "absl/strings/string_view.h"
 #include "src/core/config/core_configuration.h"
 #include "src/core/lib/address_utils/sockaddr_utils.h"
 #include "src/core/lib/channel/channel_args.h"
@@ -76,6 +68,14 @@
 #include "src/core/util/time.h"
 #include "src/core/util/validation_errors.h"
 #include "src/core/util/work_serializer.h"
+#include "absl/algorithm/container.h"
+#include "absl/container/flat_hash_map.h"
+#include "absl/random/random.h"
+#include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
+#include "absl/strings/string_view.h"
 
 namespace grpc_core {
 
@@ -125,9 +125,8 @@ class AutoShardingLbConfig final : public LoadBalancingPolicy::Config {
                            &AutoShardingLbConfig::slice_key_header_name_)
             .OptionalField("enableFallback",
                            &AutoShardingLbConfig::enable_fallback_)
-            .OptionalField(
-                "initialAssignmentTimeout",
-                &AutoShardingLbConfig::initial_assignment_timeout_)
+            .OptionalField("initialAssignmentTimeout",
+                           &AutoShardingLbConfig::initial_assignment_timeout_)
             .Finish();
     return loader;
   }
@@ -171,9 +170,9 @@ class AutoSharding final : public LoadBalancingPolicy {
   // with the endpoints (by index into Assignment::endpoint_names) that
   // serve it.
   struct Slice {
-    std::string start_key;  // Inclusive.
+    std::string start_key;                 // Inclusive.
     std::vector<size_t> endpoint_indices;  // Indices into
-                                            // Assignment::endpoint_names.
+                                           // Assignment::endpoint_names.
   };
 
   // A complete key-range -> endpoint assignment, as would be received (in
@@ -269,8 +268,8 @@ class AutoSharding final : public LoadBalancingPolicy {
     absl::Status UpdateChildPolicyLocked();
 
     void OnStateUpdate(grpc_connectivity_state new_state,
-                        const absl::Status& status,
-                        RefCountedPtr<SubchannelPicker> picker);
+                       const absl::Status& status,
+                       RefCountedPtr<SubchannelPicker> picker);
 
     RefCountedPtr<AutoSharding> parent_;
     size_t index_;
@@ -284,7 +283,8 @@ class AutoSharding final : public LoadBalancingPolicy {
 
   class Picker final : public SubchannelPicker {
    public:
-    Picker(RefCountedPtr<AutoSharding> parent, RefCountedPtr<SliceMap> slice_map,
+    Picker(RefCountedPtr<AutoSharding> parent,
+           RefCountedPtr<SliceMap> slice_map,
            std::vector<PickerEndpoint> endpoints,
            std::string slice_key_header_name, bool fallback_enabled,
            std::string resolution_note);
@@ -335,7 +335,7 @@ class AutoSharding final : public LoadBalancingPolicy {
     bool fallback_enabled_;
     std::string resolution_note_;
     std::vector<bool> slice_in_fallback_;  // Precomputed, indexed like
-                                            // slice_map_->slices().
+                                           // slice_map_->slices().
   };
 
   ~AutoSharding() override = default;
@@ -403,11 +403,10 @@ std::optional<size_t> AutoSharding::SliceMap::Lookup(
   // Handle the startup/fallback case where there are no assignments.
   if (slices_.empty()) return std::nullopt;
   // Binary search for the first slice whose start_key is greater than key.
-  auto it = std::upper_bound(
-      slices_.begin(), slices_.end(), key,
-      [](absl::string_view k, const SliceEntry& entry) {
-        return k < entry.start_key;
-      });
+  auto it = std::upper_bound(slices_.begin(), slices_.end(), key,
+                             [](absl::string_view k, const SliceEntry& entry) {
+                               return k < entry.start_key;
+                             });
   // Assignments are required to have no gaps and to cover the full key
   // range, so this should never happen for a valid assignment. Guard
   // against it anyway, since validation isn't implemented yet (it happens
@@ -514,9 +513,9 @@ absl::Status AutoSharding::Endpoint::UpdateChildPolicyLocked() {
   return child_policy_->UpdateLocked(std::move(update_args));
 }
 
-void AutoSharding::Endpoint::OnStateUpdate(grpc_connectivity_state new_state,
-                                            const absl::Status& status,
-                                            RefCountedPtr<SubchannelPicker> picker) {
+void AutoSharding::Endpoint::OnStateUpdate(
+    grpc_connectivity_state new_state, const absl::Status& status,
+    RefCountedPtr<SubchannelPicker> picker) {
   if (child_policy_ == nullptr) return;  // Already orphaned.
   connectivity_state_ = new_state;
   picker_ = std::move(picker);
@@ -531,8 +530,7 @@ AutoSharding::Picker::Picker(RefCountedPtr<AutoSharding> parent,
                              RefCountedPtr<SliceMap> slice_map,
                              std::vector<PickerEndpoint> endpoints,
                              std::string slice_key_header_name,
-                             bool fallback_enabled,
-                             std::string resolution_note)
+                             bool fallback_enabled, std::string resolution_note)
     : parent_(std::move(parent)),
       slice_map_(std::move(slice_map)),
       endpoints_(std::move(endpoints)),
@@ -558,18 +556,17 @@ bool AutoSharding::Picker::PoolInFallback(
 absl::Status AutoSharding::Picker::AddResolutionNote(
     absl::Status status) const {
   if (resolution_note_.empty()) return status;
-  return absl::Status(status.code(),
-                      absl::StrCat(status.message(), " (", resolution_note_,
-                                   ")"));
+  return absl::Status(status.code(), absl::StrCat(status.message(), " (",
+                                                  resolution_note_, ")"));
 }
 
 LoadBalancingPolicy::PickResult AutoSharding::Picker::Pick(PickArgs args) {
   std::string buffer;
   auto key = args.initial_metadata->Lookup(slice_key_header_name_, &buffer);
   if (!key.has_value()) {
-    return PickResult::Fail(AddResolutionNote(absl::UnavailableError(absl::StrCat(
-        "autosharding: request is missing required header \"",
-        slice_key_header_name_, "\""))));
+    return PickResult::Fail(AddResolutionNote(absl::UnavailableError(
+        absl::StrCat("autosharding: request is missing required header \"",
+                     slice_key_header_name_, "\""))));
   }
   std::optional<size_t> slice_idx = slice_map_->Lookup(*key);
   // No assignment covers this key. This is expected any time a valid
@@ -659,8 +656,7 @@ std::string AutoSharding::HostnameForEndpoint(
   // when neither is available.
   auto name = endpoint.args().GetString(GRPC_ARG_ADDRESS_NAME);
   if (name.has_value()) return std::string(*name);
-  return grpc_sockaddr_to_string(&endpoint.addresses().front(), false)
-      .value();
+  return grpc_sockaddr_to_string(&endpoint.addresses().front(), false).value();
 }
 
 AutoSharding::EndpointIndexMap AutoSharding::BuildEndpointIndexMap() const {
@@ -720,26 +716,26 @@ absl::Status AutoSharding::UpdateLocked(UpdateArgs args) {
       }
       endpoint_map.emplace(hostname, std::move(it->second));
     } else {
-      endpoint_map.emplace(hostname, MakeOrphanable<Endpoint>(
-                                          RefAsSubclass<AutoSharding>(), i));
+      endpoint_map.emplace(
+          hostname, MakeOrphanable<Endpoint>(RefAsSubclass<AutoSharding>(), i));
     }
   }
   endpoint_map_ = std::move(endpoint_map);
   resolution_note_ = std::move(args.resolution_note);
   // If the address list is empty, report TRANSIENT_FAILURE.
   if (endpoints_.empty()) {
-    absl::Status status =
-        args.addresses.ok()
-            ? absl::UnavailableError(
-                  absl::StrCat("empty address list: ", resolution_note_))
-            : args.addresses.status();
+    absl::Status status = args.addresses.ok()
+                              ? absl::UnavailableError(absl::StrCat(
+                                    "empty address list: ", resolution_note_))
+                              : args.addresses.status();
     channel_control_helper()->UpdateState(
         GRPC_CHANNEL_TRANSIENT_FAILURE, status,
         MakeRefCounted<TransientFailurePicker>(status));
     return status;
   }
   slice_map_ = MakeRefCounted<SliceMap>(
-      BuildEndpointIndexMap(), assignment_.has_value() ? &*assignment_ : nullptr);
+      BuildEndpointIndexMap(),
+      assignment_.has_value() ? &*assignment_ : nullptr);
   UpdateAggregatedConnectivityStateLocked(absl::OkStatus());
   if (!errors.empty()) {
     return absl::UnavailableError(absl::StrCat(

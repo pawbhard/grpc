@@ -23,15 +23,15 @@
 #include <utility>
 #include <vector>
 
-#include "absl/status/status.h"
-#include "absl/strings/match.h"
-#include "absl/strings/string_view.h"
 #include "src/core/load_balancing/lb_policy.h"
 #include "src/core/util/json/json.h"
 #include "src/core/util/ref_counted_ptr.h"
 #include "test/core/load_balancing/lb_policy_test_lib.h"
 #include "test/core/test_util/test_config.h"
 #include "gtest/gtest.h"
+#include "absl/status/status.h"
+#include "absl/strings/match.h"
+#include "absl/strings/string_view.h"
 
 namespace grpc_core {
 namespace testing {
@@ -91,8 +91,7 @@ TEST_F(AutoShardingTest, MissingShardKeyHeaderFails) {
   auto picker = ExpectState(GRPC_CHANNEL_IDLE);
   ExpectPickFail(picker.get(), [](const absl::Status& status) {
     EXPECT_EQ(status.code(), absl::StatusCode::kUnavailable);
-    EXPECT_TRUE(absl::StrContains(status.message(), "x-shard-key"))
-        << status;
+    EXPECT_TRUE(absl::StrContains(status.message(), "x-shard-key")) << status;
   });
 }
 
@@ -142,12 +141,12 @@ TEST_F(AutoShardingTest, RoutesToFallbackPoolWhenFallbackEnabled) {
 
 TEST_F(AutoShardingTest, DuplicateHostnameKeepsFirstEndpoint) {
   constexpr absl::string_view kAddress = "ipv4:127.0.0.1:441";
-  EXPECT_EQ(ApplyUpdate(BuildUpdate({kAddress, kAddress},
-                                    MakeAutoShardingConfig(
-                                        "x-shard-key",
-                                        /*enable_fallback=*/true)),
-                        lb_policy()),
-            absl::OkStatus());
+  EXPECT_EQ(
+      ApplyUpdate(BuildUpdate({kAddress, kAddress},
+                              MakeAutoShardingConfig("x-shard-key",
+                                                     /*enable_fallback=*/true)),
+                  lb_policy()),
+      absl::OkStatus());
   auto picker = ExpectState(GRPC_CHANNEL_IDLE);
   ExpectPickQueued(picker.get(), {}, {{"x-shard-key", "k"}});
   WaitForWorkSerializerToFlush();
@@ -164,12 +163,11 @@ TEST_F(AutoShardingTest, DuplicateHostnameKeepsFirstEndpoint) {
 }
 
 TEST_F(AutoShardingTest, ConnectivityStateAggregation) {
-  const std::array<absl::string_view, 2> kAddresses = {
-      "ipv4:127.0.0.1:441", "ipv4:127.0.0.1:442"};
-  EXPECT_EQ(ApplyUpdate(BuildUpdate(kAddresses,
-                                    MakeAutoShardingConfig(
-                                        "x-shard-key",
-                                        /*enable_fallback=*/true)),
+  const std::array<absl::string_view, 2> kAddresses = {"ipv4:127.0.0.1:441",
+                                                       "ipv4:127.0.0.1:442"};
+  EXPECT_EQ(ApplyUpdate(BuildUpdate(kAddresses, MakeAutoShardingConfig(
+                                                    "x-shard-key",
+                                                    /*enable_fallback=*/true)),
                         lb_policy()),
             absl::OkStatus());
   auto picker = ExpectState(GRPC_CHANNEL_IDLE);
@@ -189,16 +187,16 @@ TEST_F(AutoShardingTest, ConnectivityStateAggregation) {
   ASSERT_NE(connecting_subchannel, nullptr);
   connecting_subchannel->SetConnectivityState(GRPC_CHANNEL_CONNECTING);
   ExpectState(GRPC_CHANNEL_CONNECTING);
-  connecting_subchannel->SetConnectivityState(
-      GRPC_CHANNEL_TRANSIENT_FAILURE, absl::UnavailableError("ugh1"));
+  connecting_subchannel->SetConnectivityState(GRPC_CHANNEL_TRANSIENT_FAILURE,
+                                              absl::UnavailableError("ugh1"));
   ExpectReresolutionRequest();
   // Only 1 of 2 endpoints in TRANSIENT_FAILURE -> aggregation rule 4:
   // report CONNECTING, and trigger a connection attempt on the other
   // (IDLE) endpoint even without any picks.
   picker = ExpectState(GRPC_CHANNEL_CONNECTING);
-  SubchannelState* other_subchannel =
-      connecting_subchannel == subchannel0 ? FindSubchannel(kAddresses[1])
-                                           : FindSubchannel(kAddresses[0]);
+  SubchannelState* other_subchannel = connecting_subchannel == subchannel0
+                                          ? FindSubchannel(kAddresses[1])
+                                          : FindSubchannel(kAddresses[0]);
   ASSERT_NE(other_subchannel, nullptr);
   EXPECT_TRUE(other_subchannel->ConnectionRequested());
   subchannel1 = other_subchannel;
@@ -209,8 +207,8 @@ TEST_F(AutoShardingTest, ConnectivityStateAggregation) {
   ExpectReresolutionRequest();
   // Both endpoints in TRANSIENT_FAILURE -> aggregation rule 2.
   ExpectState(GRPC_CHANNEL_TRANSIENT_FAILURE,
-             absl::UnavailableError(
-                 "no reachable endpoints; last error: UNAVAILABLE: ugh2"));
+              absl::UnavailableError(
+                  "no reachable endpoints; last error: UNAVAILABLE: ugh2"));
 }
 
 }  // namespace
