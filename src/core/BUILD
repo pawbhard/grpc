@@ -8244,6 +8244,51 @@ grpc_cc_library(
 )
 
 grpc_cc_library(
+    name = "grpc_lb_policy_autosharding",
+    srcs = [
+        "load_balancing/autosharding/autosharding.cc",
+    ],
+    external_deps = [
+        "absl/algorithm:container",
+        "absl/container:flat_hash_map",
+        "absl/random",
+        "absl/status",
+        "absl/status:statusor",
+        "absl/strings",
+    ],
+    deps = [
+        "channel_args",
+        "closure",
+        "delegating_helper",
+        "error",
+        "grpc_check",
+        "grpc_lb_policy_pick_first",
+        "json",
+        "json_args",
+        "json_object_loader",
+        "lb_policy",
+        "lb_policy_factory",
+        "lb_policy_registry",
+        "pollset_set",
+        "ref_counted",
+        "resolved_address",
+        "shared_bit_gen",
+        "time",
+        "validation_errors",
+        "//:config",
+        "//:debug_location",
+        "//:endpoint_addresses",
+        "//:exec_ctx",
+        "//:gpr",
+        "//:grpc_base",
+        "//:orphanable",
+        "//:ref_counted_ptr",
+        "//:sockaddr_utils",
+        "//:work_serializer",
+    ],
+)
+
+grpc_cc_library(
     name = "grpc_lb_policy_round_robin",
     srcs = [
         "load_balancing/round_robin/round_robin.cc",

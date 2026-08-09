@@ -937,6 +937,7 @@ grpc_cc_library(
         "census",
         "//src/core:grpc_backend_metric_filter",
         "//src/core:grpc_client_authority_filter",
+        "//src/core:grpc_lb_policy_autosharding",
         "//src/core:grpc_lb_policy_grpclb",
         "//src/core:grpc_lb_policy_outlier_detection",
         "//src/core:grpc_lb_policy_pick_first",
