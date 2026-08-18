@@ -130,7 +130,8 @@ class AutoShardingLbConfig final : public LoadBalancingPolicy::Config {
     }
     {
       ValidationErrors::ScopedField field(errors, ".initialAssignmentTimeout");
-      if (!errors->FieldHasErrors() && initial_assignment_timeout_.millis() <= 0) {
+      if (!errors->FieldHasErrors() &&
+          initial_assignment_timeout_.millis() <= 0) {
         errors->AddError("must be greater than zero");
       }
     }
@@ -198,7 +199,7 @@ class AutoSharding final : public LoadBalancingPolicy {
     // Complete list of endpoint names in the assignment.
     std::vector<std::string> endpoint_names;
     // Generation number of the assignment.
-    size_t generation = 0; // ppcheck size_t or int64_t
+    size_t generation = 0;  // ppcheck size_t or int64_t
   };
 
   //
@@ -219,7 +220,8 @@ class AutoSharding final : public LoadBalancingPolicy {
       // Indices into the Picker's endpoint list.
       std::vector<size_t> endpoints;
     };
-    // ppcheck we don't need all these functions we can just create in constructor
+    // ppcheck we don't need all these functions we can just create in
+    // constructor
     void SetFallbackPool(std::vector<size_t> fallback_pool) {
       fallback_pool_ = std::move(fallback_pool);
     }
@@ -233,9 +235,7 @@ class AutoSharding final : public LoadBalancingPolicy {
 
     // Indices into the Picker's endpoint list for the resolver endpoints,
     // sorted by endpoint index.
-    const std::vector<size_t>& fallback_pool() const {
-      return fallback_pool_;
-    }
+    const std::vector<size_t>& fallback_pool() const { return fallback_pool_; }
 
     size_t generation() const { return generation_; }
 
@@ -355,8 +355,8 @@ class AutoSharding final : public LoadBalancingPolicy {
 
   class Picker final : public SubchannelPicker {
    public:
-    Picker(RefCountedPtr<AutoSharding> policy, RefCountedPtr<SliceMap> slice_map,
-           bool assignment_pending);
+    Picker(RefCountedPtr<AutoSharding> policy,
+           RefCountedPtr<SliceMap> slice_map, bool assignment_pending);
 
     PickResult Pick(PickArgs args) override;
 
@@ -511,10 +511,9 @@ AutoSharding::Picker::Picker(RefCountedPtr<AutoSharding> policy,
   for (const auto& [_, endpoint] : policy_->endpoint_map_) {
     endpoint_indices.emplace_back(endpoint->index(), endpoint.get());
   }
-  std::sort(endpoint_indices.begin(), endpoint_indices.end(),
-            [](const auto& lhs, const auto& rhs) {
-              return lhs.first < rhs.first;
-            });
+  std::sort(
+      endpoint_indices.begin(), endpoint_indices.end(),
+      [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
   for (const auto& [index, endpoint] : endpoint_indices) {
     endpoints_[index] = endpoint->GetInfoForPicker();
   }
@@ -607,8 +606,7 @@ AutoSharding::PickResult AutoSharding::Picker::PickFromEndpointIndices(
     return PickResult::Fail(absl::UnavailableError(message));
   }
   // Pick a random starting index within the pool.
-  size_t first_index =
-      absl::Uniform<size_t>(SharedBitGen(), 0, indices.size());
+  size_t first_index = absl::Uniform<size_t>(SharedBitGen(), 0, indices.size());
   bool requested_connection = false;
   bool found_connecting = false;
   // Iterate through candidate endpoints starting at first_index.
@@ -661,14 +659,13 @@ AutoSharding::InitialAssignmentTimer::InitialAssignmentTimer(
   GRPC_TRACE_LOG(autosharding_lb, INFO)
       << "[AS " << policy_.get() << "] starting initial assignment timer for "
       << timeout.millis() << "ms";
-  timer_handle_ =
-      policy_->channel_control_helper()->GetEventEngine()->RunAfter(
-          timeout, [self = Ref(DEBUG_LOCATION, "Timer")]() mutable {
-            ExecCtx exec_ctx;
-            auto self_ptr = self.get();
-            self_ptr->policy_->work_serializer()->Run(
-                [self = std::move(self)]() { self->OnTimerLocked(); });
-          });
+  timer_handle_ = policy_->channel_control_helper()->GetEventEngine()->RunAfter(
+      timeout, [self = Ref(DEBUG_LOCATION, "Timer")]() mutable {
+        ExecCtx exec_ctx;
+        auto self_ptr = self.get();
+        self_ptr->policy_->work_serializer()->Run(
+            [self = std::move(self)]() { self->OnTimerLocked(); });
+      });
 }
 
 void AutoSharding::InitialAssignmentTimer::Orphan() {
@@ -761,9 +758,9 @@ void AutoSharding::AutoShardingEndpoint::CreateChildPolicy() {
           "pick_first", std::move(lb_policy_args));
   if (GRPC_TRACE_FLAG_ENABLED(autosharding_lb)) {
     const EndpointAddresses& endpoint = policy_->endpoints_[index_];
-    LOG(INFO) << "[AS " << policy_.get() << "] endpoint " << this
-              << " (index " << index_ << " of " << policy_->endpoints_.size()
-              << ", " << endpoint.ToString() << "): created child policy "
+    LOG(INFO) << "[AS " << policy_.get() << "] endpoint " << this << " (index "
+              << index_ << " of " << policy_->endpoints_.size() << ", "
+              << endpoint.ToString() << "): created child policy "
               << child_policy_.get();
   }
   // Add our interested_parties pollset_set to that of the newly created
@@ -849,8 +846,8 @@ void AutoSharding::ResetBackoffLocked() {
 absl::Status AutoSharding::UpdateLocked(UpdateArgs args) {
   // Check address list.
   if (args.addresses.ok()) {
-    GRPC_TRACE_LOG(autosharding_lb, INFO) << "[AS " << this
-                                          << "] received update";
+    GRPC_TRACE_LOG(autosharding_lb, INFO)
+        << "[AS " << this << "] received update";
     // Save the endpoint list.
     endpoints_.clear();
     (*args.addresses)->ForEach([&](const EndpointAddresses& endpoint) {
@@ -868,7 +865,8 @@ absl::Status AutoSharding::UpdateLocked(UpdateArgs args) {
   args_ = std::move(args.args);
   // Save config.
   auto* config = DownCast<AutoShardingLbConfig*>(args.config.get());
-  slice_key_header_name_ = RefCountedStringValue(config->slice_key_header_name());
+  slice_key_header_name_ =
+      RefCountedStringValue(config->slice_key_header_name());
   fallback_enabled_ = config->enable_fallback();
   initial_assignment_timeout_ = config->initial_assignment_timeout();
   // If the channel factory key has changed (or if this is the first
@@ -916,8 +914,8 @@ absl::Status AutoSharding::UpdateLocked(UpdateArgs args) {
     if (it != endpoint_map_.end()) {
       absl::Status status = it->second->UpdateLocked(i);
       if (!status.ok()) {
-        errors.emplace_back(absl::StrCat("endpoint ", hostname, ": ",
-                                         status.ToString()));
+        errors.emplace_back(
+            absl::StrCat("endpoint ", hostname, ": ", status.ToString()));
       }
       endpoint_map[hostname] = std::move(it->second);
       endpoint_map_.erase(it);
@@ -987,7 +985,8 @@ void AutoSharding::CreateShardingServiceChannelLocked() {
       initial_assignment_timeout_);
 }
 
-RefCountedPtr<AutoSharding::SliceMap> AutoSharding::BuildSliceMapLocked() const {
+RefCountedPtr<AutoSharding::SliceMap> AutoSharding::BuildSliceMapLocked()
+    const {
   auto slice_map = MakeRefCounted<SliceMap>();
   // Populate the fallback pool, deterministically sorted by endpoint index.
   std::vector<std::pair<size_t, AutoShardingEndpoint*>> endpoint_indices;
@@ -995,10 +994,9 @@ RefCountedPtr<AutoSharding::SliceMap> AutoSharding::BuildSliceMapLocked() const 
   for (const auto& [_, endpoint] : endpoint_map_) {
     endpoint_indices.emplace_back(endpoint->index(), endpoint.get());
   }
-  std::sort(endpoint_indices.begin(), endpoint_indices.end(),
-            [](const auto& lhs, const auto& rhs) {
-              return lhs.first < rhs.first;
-            });
+  std::sort(
+      endpoint_indices.begin(), endpoint_indices.end(),
+      [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
   std::vector<size_t> fallback_pool;
   fallback_pool.reserve(endpoint_indices.size());
   for (const auto& [index, _] : endpoint_indices) {
