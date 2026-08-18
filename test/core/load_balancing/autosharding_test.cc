@@ -14,8 +14,6 @@
 // limitations under the License.
 //
 
-#include "src/core/load_balancing/autosharding/autoshard.h"
-
 #include <grpc/grpc.h>
 #include <stdint.h>
 
@@ -28,6 +26,7 @@
 #include <vector>
 
 #include "src/core/config/core_configuration.h"
+#include "src/core/load_balancing/autosharding/autoshard.h"
 #include "src/core/load_balancing/lb_policy.h"
 #include "src/core/load_balancing/lb_policy_registry.h"
 #include "src/core/resolver/endpoint_addresses.h"
@@ -76,9 +75,9 @@ class AutoShardingTest : public LoadBalancingPolicyTest {
   RefCountedPtr<LoadBalancingPolicy::SubchannelPicker> ApplyUpdateAndExpectIdle(
       absl::Span<const absl::string_view> addresses,
       RefCountedPtr<LoadBalancingPolicy::Config> config) {
-    EXPECT_EQ(ApplyUpdate(BuildUpdate(addresses, std::move(config)),
-                          lb_policy()),
-              absl::OkStatus());
+    EXPECT_EQ(
+        ApplyUpdate(BuildUpdate(addresses, std::move(config)), lb_policy()),
+        absl::OkStatus());
     auto picker = ExpectState(GRPC_CHANNEL_IDLE);
     // While waiting for the initial assignment, picks should be queued, and
     // no connections should be attempted (child policies are created
@@ -104,8 +103,7 @@ const std::map<std::string, std::string> AutoShardingTest::kSliceKeyMetadata = {
 
 TEST_F(AutoShardingTest, QueuesPicksUntilInitialAssignmentTimeoutExpires) {
   SetExpectedTimerDuration(std::chrono::seconds(1));
-  auto picker =
-      ApplyUpdateAndExpectIdle(kAddresses, MakeAutoShardingConfig());
+  auto picker = ApplyUpdateAndExpectIdle(kAddresses, MakeAutoShardingConfig());
   // Expire the initial assignment timer.
   IncrementTimeBy(Duration::Seconds(1));
   // The policy should report a new picker that uses the fallback pool.
@@ -141,8 +139,9 @@ TEST_F(AutoShardingTest, QueuesPicksUntilInitialAssignmentTimeoutExpires) {
 
 TEST_F(AutoShardingTest, FallbackDisabledFailsPicksAfterTimeout) {
   auto picker = ApplyUpdateAndExpectIdle(
-      kAddresses, MakeAutoShardingConfig(/*slice_key_header_name=*/"x-slice-key",
-                                         /*enable_fallback=*/false));
+      kAddresses,
+      MakeAutoShardingConfig(/*slice_key_header_name=*/"x-slice-key",
+                             /*enable_fallback=*/false));
   // Expire the initial assignment timer.
   IncrementTimeBy(Duration::Seconds(1));
   picker = ExpectState(GRPC_CHANNEL_IDLE);
@@ -153,13 +152,13 @@ TEST_F(AutoShardingTest, FallbackDisabledFailsPicksAfterTimeout) {
   auto* fail =
       std::get_if<LoadBalancingPolicy::PickResult::Fail>(&pick_result.result);
   ASSERT_NE(fail, nullptr);
-  EXPECT_EQ(fail->status, absl::UnavailableError(
-                              "no assignment received from the sharding service"));
+  EXPECT_EQ(fail->status,
+            absl::UnavailableError(
+                "no assignment received from the sharding service"));
 }
 
 TEST_F(AutoShardingTest, MissingSliceKeyHeaderFails) {
-  auto picker =
-      ApplyUpdateAndExpectIdle(kAddresses, MakeAutoShardingConfig());
+  auto picker = ApplyUpdateAndExpectIdle(kAddresses, MakeAutoShardingConfig());
   // Expire the initial assignment timer.
   IncrementTimeBy(Duration::Seconds(1));
   picker = ExpectState(GRPC_CHANNEL_IDLE);
@@ -174,8 +173,7 @@ TEST_F(AutoShardingTest, EmptyEndpointList) {
   EXPECT_EQ(ApplyUpdate(BuildUpdate(kNoAddresses, MakeAutoShardingConfig()),
                         lb_policy()),
             absl::UnavailableError("empty address list: "));
-  ExpectTransientFailureUpdate(
-      absl::UnavailableError("empty address list: "));
+  ExpectTransientFailureUpdate(absl::UnavailableError("empty address list: "));
 }
 
 TEST_F(AutoShardingTest, EndpointsWithDuplicateHostnamesAreCollapsed) {
@@ -215,20 +213,20 @@ TEST_F(AutoShardingTest, ConfigFailsWithoutSliceKeyHeader) {
       CoreConfiguration::Get().lb_policy_registry().ParseLoadBalancingConfig(
           Json::FromArray({Json::FromObject(
               {{"autosharding_experimental",
-                Json::FromObject({{"enableFallback", Json::FromBool(true)}})}})}));
+                Json::FromObject(
+                    {{"enableFallback", Json::FromBool(true)}})}})}));
   EXPECT_FALSE(config.ok());
 }
 
 TEST_F(AutoShardingTest, ConfigFailsWithZeroInitialAssignmentTimeout) {
   auto config =
       CoreConfiguration::Get().lb_policy_registry().ParseLoadBalancingConfig(
-          Json::FromArray({Json::FromObject({{"autosharding_experimental",
-                                              Json::FromObject(
-                                                  {{"sliceKeyHeaderName",
-                                                    Json::FromString(
-                                                        "x-slice-key")},
-                                                   {"initialAssignmentTimeout",
-                                                    Json::FromString("0s")}})}})}));
+          Json::FromArray({Json::FromObject(
+              {{"autosharding_experimental",
+                Json::FromObject(
+                    {{"sliceKeyHeaderName", Json::FromString("x-slice-key")},
+                     {"initialAssignmentTimeout",
+                      Json::FromString("0s")}})}})}));
   EXPECT_FALSE(config.ok());
 }
 

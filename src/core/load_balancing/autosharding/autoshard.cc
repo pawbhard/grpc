@@ -130,7 +130,8 @@ class AutoShardingLbConfig final : public LoadBalancingPolicy::Config {
     }
     {
       ValidationErrors::ScopedField field(errors, ".initialAssignmentTimeout");
-      if (!errors->FieldHasErrors() && initial_assignment_timeout_.millis() <= 0) {
+      if (!errors->FieldHasErrors() &&
+          initial_assignment_timeout_.millis() <= 0) {
         errors->AddError("must be greater than zero");
       }
     }
@@ -155,6 +156,10 @@ class AutoShardingLbConfig final : public LoadBalancingPolicy::Config {
 // autosharding LB policy
 //
 
+namespace testing {
+class AutoShardingTest;
+}
+
 class AutoSharding final : public LoadBalancingPolicy {
  public:
   explicit AutoSharding(Args args);
@@ -163,6 +168,8 @@ class AutoSharding final : public LoadBalancingPolicy {
 
   absl::Status UpdateLocked(UpdateArgs args) override;
   void ResetBackoffLocked() override;
+
+  friend class testing::AutoShardingTest;
 
  private:
   //
@@ -198,7 +205,7 @@ class AutoSharding final : public LoadBalancingPolicy {
     // Complete list of endpoint names in the assignment.
     std::vector<std::string> endpoint_names;
     // Generation number of the assignment.
-    size_t generation = 0; // ppcheck size_t or int64_t
+    size_t generation = 0;  // ppcheck size_t or int64_t
   };
 
   //
@@ -213,58 +220,74 @@ class AutoSharding final : public LoadBalancingPolicy {
    public:
     // A key-range in the keyspace.
     struct Entry {
-      // Inclusive start key.  The end key is implied by the start key of the
-      // next entry.
+      // Inclusive start key.  Empty if the slice covers the start of the
+      // keyspace (-infinity).
       std::string start_key;
+      // Exclusive end key.  Empty if the slice covers the end of the
+      // keyspace (+infinity).
+      std::string end_key;
       // Indices into the Picker's endpoint list.
       std::vector<size_t> endpoints;
+
+      bool Contains(absl::string_view key) const {
+        if (!start_key.empty() && key < start_key) return false;
+        if (!end_key.empty() && key >= end_key) return false;
+        return true;
+      }
     };
-    // ppcheck we don't need all these functions we can just create in constructor
+
+    struct EndKeyLess {
+      bool operator()(absl::string_view a, absl::string_view b) const {
+        if (a.empty() && b.empty()) return false;
+        if (a.empty()) return false;  // a is +infinity, cannot be < b
+        if (b.empty()) return true;   // b is +infinity, any finite a is < b
+        return a < b;
+      }
+    };
+
     void SetFallbackPool(std::vector<size_t> fallback_pool) {
       fallback_pool_ = std::move(fallback_pool);
     }
 
     void AddSlice(Entry entry) { slices_.push_back(std::move(entry)); }
 
+    void SortSlices() {
+      std::sort(slices_.begin(), slices_.end(),
+                [](const Entry& lhs, const Entry& rhs) {
+                  return EndKeyLess()(lhs.end_key, rhs.end_key);
+                });
+    }
+
     void SetGeneration(size_t generation) { generation_ = generation; }
 
-    // Sorted by start_key.
+    // Sorted by exclusive end_key using EndKeyLess.
     const std::vector<Entry>& slices() const { return slices_; }
 
     // Indices into the Picker's endpoint list for the resolver endpoints,
     // sorted by endpoint index.
-    const std::vector<size_t>& fallback_pool() const {
-      return fallback_pool_;
-    }
+    const std::vector<size_t>& fallback_pool() const { return fallback_pool_; }
 
     size_t generation() const { return generation_; }
 
     // Returns the index into slices() of the slice that covers the given
     // key, or nullopt if there are no slices (i.e., no assignment has been
-    // received from the sharding service yet).
+    // received from the sharding service yet) or if key is not contained.
     //
-    // Because assignments are pre-validated to have no gaps and cover the
-    // full key range, and since slices() is sorted by start_key, this boils
-    // down to a binary search for the first slice whose start_key is > key;
-    // the matching slice is the one immediately before it (or the exact
-    // match itself, since start_key is inclusive).
+    // Following the internal slicer implementation, we index/sort slices by
+    // their exclusive end_key. Because ranges are [start_key, end_key),
+    // finding the first slice whose exclusive end_key is strictly greater
+    // than key using std::upper_bound directly identifies the candidate range.
+    // We then verify range containment using Contains().
     std::optional<size_t> Lookup(absl::string_view key) const {
       if (slices_.empty()) return std::nullopt;
-      // Find the insertion index: the first slice whose start_key is > key.
-      size_t low = 0;
-      size_t high = slices_.size();
-      while (low < high) {
-        size_t mid = (low + high) / 2;
-        if (slices_[mid].start_key <= key) {
-          low = mid + 1;
-        } else {
-          high = mid;
-        }
+      auto it = std::upper_bound(slices_.begin(), slices_.end(), key,
+                                 [](absl::string_view key, const Entry& entry) {
+                                   return EndKeyLess()(key, entry.end_key);
+                                 });
+      if (it != slices_.end() && it->Contains(key)) {
+        return std::distance(slices_.begin(), it);
       }
-      // key falls in the range [slices_[low - 1].start_key,
-      // slices_[low].start_key).
-      if (low == 0) return std::nullopt;  // Gap before the first slice.
-      return low - 1;
+      return std::nullopt;
     }
 
    private:
@@ -355,8 +378,8 @@ class AutoSharding final : public LoadBalancingPolicy {
 
   class Picker final : public SubchannelPicker {
    public:
-    Picker(RefCountedPtr<AutoSharding> policy, RefCountedPtr<SliceMap> slice_map,
-           bool assignment_pending);
+    Picker(RefCountedPtr<AutoSharding> policy,
+           RefCountedPtr<SliceMap> slice_map, bool assignment_pending);
 
     PickResult Pick(PickArgs args) override;
 
@@ -511,10 +534,9 @@ AutoSharding::Picker::Picker(RefCountedPtr<AutoSharding> policy,
   for (const auto& [_, endpoint] : policy_->endpoint_map_) {
     endpoint_indices.emplace_back(endpoint->index(), endpoint.get());
   }
-  std::sort(endpoint_indices.begin(), endpoint_indices.end(),
-            [](const auto& lhs, const auto& rhs) {
-              return lhs.first < rhs.first;
-            });
+  std::sort(
+      endpoint_indices.begin(), endpoint_indices.end(),
+      [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
   for (const auto& [index, endpoint] : endpoint_indices) {
     endpoints_[index] = endpoint->GetInfoForPicker();
   }
@@ -607,8 +629,7 @@ AutoSharding::PickResult AutoSharding::Picker::PickFromEndpointIndices(
     return PickResult::Fail(absl::UnavailableError(message));
   }
   // Pick a random starting index within the pool.
-  size_t first_index =
-      absl::Uniform<size_t>(SharedBitGen(), 0, indices.size());
+  size_t first_index = absl::Uniform<size_t>(SharedBitGen(), 0, indices.size());
   bool requested_connection = false;
   bool found_connecting = false;
   // Iterate through candidate endpoints starting at first_index.
@@ -661,14 +682,13 @@ AutoSharding::InitialAssignmentTimer::InitialAssignmentTimer(
   GRPC_TRACE_LOG(autosharding_lb, INFO)
       << "[AS " << policy_.get() << "] starting initial assignment timer for "
       << timeout.millis() << "ms";
-  timer_handle_ =
-      policy_->channel_control_helper()->GetEventEngine()->RunAfter(
-          timeout, [self = Ref(DEBUG_LOCATION, "Timer")]() mutable {
-            ExecCtx exec_ctx;
-            auto self_ptr = self.get();
-            self_ptr->policy_->work_serializer()->Run(
-                [self = std::move(self)]() { self->OnTimerLocked(); });
-          });
+  timer_handle_ = policy_->channel_control_helper()->GetEventEngine()->RunAfter(
+      timeout, [self = Ref(DEBUG_LOCATION, "Timer")]() mutable {
+        ExecCtx exec_ctx;
+        auto self_ptr = self.get();
+        self_ptr->policy_->work_serializer()->Run(
+            [self = std::move(self)]() { self->OnTimerLocked(); });
+      });
 }
 
 void AutoSharding::InitialAssignmentTimer::Orphan() {
@@ -761,9 +781,9 @@ void AutoSharding::AutoShardingEndpoint::CreateChildPolicy() {
           "pick_first", std::move(lb_policy_args));
   if (GRPC_TRACE_FLAG_ENABLED(autosharding_lb)) {
     const EndpointAddresses& endpoint = policy_->endpoints_[index_];
-    LOG(INFO) << "[AS " << policy_.get() << "] endpoint " << this
-              << " (index " << index_ << " of " << policy_->endpoints_.size()
-              << ", " << endpoint.ToString() << "): created child policy "
+    LOG(INFO) << "[AS " << policy_.get() << "] endpoint " << this << " (index "
+              << index_ << " of " << policy_->endpoints_.size() << ", "
+              << endpoint.ToString() << "): created child policy "
               << child_policy_.get();
   }
   // Add our interested_parties pollset_set to that of the newly created
@@ -849,8 +869,8 @@ void AutoSharding::ResetBackoffLocked() {
 absl::Status AutoSharding::UpdateLocked(UpdateArgs args) {
   // Check address list.
   if (args.addresses.ok()) {
-    GRPC_TRACE_LOG(autosharding_lb, INFO) << "[AS " << this
-                                          << "] received update";
+    GRPC_TRACE_LOG(autosharding_lb, INFO)
+        << "[AS " << this << "] received update";
     // Save the endpoint list.
     endpoints_.clear();
     (*args.addresses)->ForEach([&](const EndpointAddresses& endpoint) {
@@ -868,7 +888,8 @@ absl::Status AutoSharding::UpdateLocked(UpdateArgs args) {
   args_ = std::move(args.args);
   // Save config.
   auto* config = DownCast<AutoShardingLbConfig*>(args.config.get());
-  slice_key_header_name_ = RefCountedStringValue(config->slice_key_header_name());
+  slice_key_header_name_ =
+      RefCountedStringValue(config->slice_key_header_name());
   fallback_enabled_ = config->enable_fallback();
   initial_assignment_timeout_ = config->initial_assignment_timeout();
   // If the channel factory key has changed (or if this is the first
@@ -916,8 +937,8 @@ absl::Status AutoSharding::UpdateLocked(UpdateArgs args) {
     if (it != endpoint_map_.end()) {
       absl::Status status = it->second->UpdateLocked(i);
       if (!status.ok()) {
-        errors.emplace_back(absl::StrCat("endpoint ", hostname, ": ",
-                                         status.ToString()));
+        errors.emplace_back(
+            absl::StrCat("endpoint ", hostname, ": ", status.ToString()));
       }
       endpoint_map[hostname] = std::move(it->second);
       endpoint_map_.erase(it);
@@ -987,7 +1008,8 @@ void AutoSharding::CreateShardingServiceChannelLocked() {
       initial_assignment_timeout_);
 }
 
-RefCountedPtr<AutoSharding::SliceMap> AutoSharding::BuildSliceMapLocked() const {
+RefCountedPtr<AutoSharding::SliceMap> AutoSharding::BuildSliceMapLocked()
+    const {
   auto slice_map = MakeRefCounted<SliceMap>();
   // Populate the fallback pool, deterministically sorted by endpoint index.
   std::vector<std::pair<size_t, AutoShardingEndpoint*>> endpoint_indices;
@@ -995,10 +1017,9 @@ RefCountedPtr<AutoSharding::SliceMap> AutoSharding::BuildSliceMapLocked() const 
   for (const auto& [_, endpoint] : endpoint_map_) {
     endpoint_indices.emplace_back(endpoint->index(), endpoint.get());
   }
-  std::sort(endpoint_indices.begin(), endpoint_indices.end(),
-            [](const auto& lhs, const auto& rhs) {
-              return lhs.first < rhs.first;
-            });
+  std::sort(
+      endpoint_indices.begin(), endpoint_indices.end(),
+      [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
   std::vector<size_t> fallback_pool;
   fallback_pool.reserve(endpoint_indices.size());
   for (const auto& [index, _] : endpoint_indices) {
@@ -1013,6 +1034,7 @@ RefCountedPtr<AutoSharding::SliceMap> AutoSharding::BuildSliceMapLocked() const 
   for (const auto& slice : assignment_->slices) {
     SliceMap::Entry entry;
     entry.start_key = slice.start_key;
+    entry.end_key = slice.end_key;
     entry.endpoints.reserve(slice.endpoints.size());
     for (size_t idx : slice.endpoints) {
       // Map index -> hostname -> EndpointState.index.
@@ -1025,6 +1047,7 @@ RefCountedPtr<AutoSharding::SliceMap> AutoSharding::BuildSliceMapLocked() const 
     }
     slice_map->AddSlice(std::move(entry));
   }
+  slice_map->SortSlices();
   return slice_map;
 }
 

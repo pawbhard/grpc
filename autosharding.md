@@ -188,20 +188,17 @@ change.
 
 ```python
 class SliceEntry:
-  start_key: bytes      # Inclusive start key
+  start_key: bytes      # Inclusive start key (empty bytes means -infinity)
+  end_key: bytes        # Exclusive end key (empty bytes means +infinity)
   endpoints: list[int]  # Indices into list[PickerEndpoint] in Picker
 
 class SliceMap:
-  slices:        list[SliceEntry] # Sorted by start_key
+  slices:        list[SliceEntry] # Sorted by end_key
   fallback_pool: list[int]        # Indices into list[PickerEndpoint] for resolver endpoints
   generation:    int              # Snapshot generation number
 ```
 
-Because assignments are pre-validated to have no gaps and cover the full key
-range, and since `SliceMap.slices` is sorted by `start_key`, the implementation
-of `SliceMap.lookup` boils down to a binary search to find the smallest index
-`i` where `SliceMap.slices[i].start_key > key`. Once we have `i`, index `i - 1`
-is what we are actually looking for. Here is a psuedo-code for it:
+Following the internal slicer implementation, `SliceMap.slices` is sorted by `end_key` (treating an empty `end_key` as $+\infty$). Because ranges are left-inclusive, right-exclusive `[start_key, end_key)`, finding the first index `idx` where `SliceMap.slices[idx].end_key > key` (equivalent to an upper bound binary search on `end_key`) directly identifies the candidate slice containing `key`. Unlike indexing by `start_key` (which requires subtracting 1 from the insertion index), indexing by `end_key` avoids index arithmetic. We then verify that `slices[idx]` contains `key` (`start_key <= key < end_key`). Here is pseudocode for it:
 
 ```python
 # Returns an index into SliceMap.slices
@@ -210,19 +207,14 @@ def lookup(self, key: bytes) -> int | None:
   if not self.slices:
     return None
 
-  # Binary search for key, comparing against slice_entry.start_key.
-  # Returns (idx, found):
-  # - found = True  if slices[idx].start_key == key
-  # - found = False if key is not an exact start_key match;
-  #           idx is the insertion index (first slice where start_key > key).
-  idx, found = binary_search(self.slices, key, key_func=lambda se: se.start_key)
+  # Binary search for key, finding the first index where end_key > key
+  # (where empty end_key is treated as +infinity).
+  idx = upper_bound(self.slices, key, key_func=lambda se: se.end_key)
 
-  # Exact match on start_key.
-  if found:
-      return idx
+  if idx < len(self.slices) and self.slices[idx].contains(key):
+    return idx
 
-  # Key falls in range [slices[idx - 1].start_key, slices[idx].start_key).
-  return idx - 1
+  return None
 ```
 
 #### Building the SliceMap
