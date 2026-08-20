@@ -73,7 +73,6 @@ namespace {
 constexpr absl::string_view kAutoSharding = "autosharding_experimental";
 
 // Default value for the initial_assignment_timeout config field.
-// ppcheck
 constexpr Duration kDefaultInitialAssignmentTimeout = Duration::Seconds(60);
 
 //
@@ -205,7 +204,7 @@ class AutoSharding final : public LoadBalancingPolicy {
     // Complete list of endpoint names in the assignment.
     std::vector<std::string> endpoint_names;
     // Generation number of the assignment.
-    size_t generation = 0;  // ppcheck size_t or int64_t
+    int64_t generation = 0;
   };
 
   //
@@ -236,12 +235,26 @@ class AutoSharding final : public LoadBalancingPolicy {
       }
     };
 
-    struct EndKeyLess {
+    struct EndKeyLessThan {
       bool operator()(absl::string_view a, absl::string_view b) const {
         if (a.empty() && b.empty()) return false;
         if (a.empty()) return false;  // a is +infinity, cannot be < b
         if (b.empty()) return true;   // b is +infinity, any finite a is < b
         return a < b;
+      }
+    };
+
+    // Comparator used by std::upper_bound to compare a request key against a
+    // slice's exclusive end_key. Unlike EndKeyLessThan (where empty string
+    // means +infinity for BOTH bounds), a request key of "" is a finite string
+    // key (the minimum key in the keyspace), whereas an empty end_key
+    // represents +infinity.
+    struct KeyLessThanSliceEndKey {
+      bool operator()(absl::string_view key, const Entry& entry) const {
+        if (entry.end_key.empty())
+          return true;  // entry.end_key is +infinity, any finite key is <
+                        // +infinity
+        return key < entry.end_key;
       }
     };
 
@@ -254,20 +267,47 @@ class AutoSharding final : public LoadBalancingPolicy {
     void SortSlices() {
       std::sort(slices_.begin(), slices_.end(),
                 [](const Entry& lhs, const Entry& rhs) {
-                  return EndKeyLess()(lhs.end_key, rhs.end_key);
+                  return EndKeyLessThan()(lhs.end_key, rhs.end_key);
                 });
     }
 
-    void SetGeneration(size_t generation) { generation_ = generation; }
+    // Validates that slice key ranges do not overlap and cover key space
+    // cleanly.
+    void CheckSliceMap() const {
+      bool contains_overlap = false;
+      bool contains_gap = false;
+      absl::string_view prev_end;
+      bool first = true;
+      for (const auto& entry : slices_) {
+        if (!first) {
+          if (!entry.start_key.empty() && !prev_end.empty() &&
+              entry.start_key < prev_end) {
+            contains_overlap = true;
+          } else if (entry.start_key != prev_end) {
+            contains_gap = true;
+          }
+        }
+        prev_end = entry.end_key;
+        first = false;
+      }
+      if (contains_overlap) {
+        LOG(ERROR) << "SliceMap contains overlapping key ranges";
+      } else if (contains_gap) {
+        GRPC_TRACE_LOG(autosharding_lb, INFO)
+            << "SliceMap contains gaps in key ranges";
+      }
+    }
 
-    // Sorted by exclusive end_key using EndKeyLess.
+    void SetGeneration(int64_t generation) { generation_ = generation; }
+
+    // Sorted by exclusive end_key using EndKeyLessThan.
     const std::vector<Entry>& slices() const { return slices_; }
 
     // Indices into the Picker's endpoint list for the resolver endpoints,
     // sorted by endpoint index.
     const std::vector<size_t>& fallback_pool() const { return fallback_pool_; }
 
-    size_t generation() const { return generation_; }
+    int64_t generation() const { return generation_; }
 
     // Returns the index into slices() of the slice that covers the given
     // key, or nullopt if there are no slices (i.e., no assignment has been
@@ -281,9 +321,7 @@ class AutoSharding final : public LoadBalancingPolicy {
     std::optional<size_t> Lookup(absl::string_view key) const {
       if (slices_.empty()) return std::nullopt;
       auto it = std::upper_bound(slices_.begin(), slices_.end(), key,
-                                 [](absl::string_view key, const Entry& entry) {
-                                   return EndKeyLess()(key, entry.end_key);
-                                 });
+                                 KeyLessThanSliceEndKey());
       if (it != slices_.end() && it->Contains(key)) {
         return std::distance(slices_.begin(), it);
       }
@@ -293,12 +331,11 @@ class AutoSharding final : public LoadBalancingPolicy {
    private:
     std::vector<Entry> slices_;
     std::vector<size_t> fallback_pool_;
-    size_t generation_ = 0;
+    int64_t generation_ = 0;
   };
 
   // State for a particular endpoint.  Delegates to a lazily-created
   // pick_first child policy.
-  // ppcheck naming of this class
   class AutoShardingEndpoint final
       : public InternallyRefCounted<AutoShardingEndpoint> {
    public:
@@ -431,7 +468,7 @@ class AutoSharding final : public LoadBalancingPolicy {
     // Snapshot of the endpoint states, indexed by EndpointState.index.
     std::vector<PickerEndpoint> endpoints_;
     // Precomputed per-slice in-fallback status.
-    std::vector<bool> slice_in_fallback_;
+    std::vector<bool> slices_in_fallback_;
     // Precomputed fallback pool in-fallback status.
     bool fallback_pool_in_fallback_ = true;
     RefCountedStringValue slice_key_header_name_;
@@ -550,9 +587,9 @@ AutoSharding::Picker::Picker(RefCountedPtr<AutoSharding> policy,
     }
   }
   // Precompute in-fallback status for each slice and for the fallback pool.
-  slice_in_fallback_.reserve(slice_map_->slices().size());
+  slices_in_fallback_.reserve(slice_map_->slices().size());
   for (const auto& slice : slice_map_->slices()) {
-    slice_in_fallback_.push_back(IsPoolInFallback(slice.endpoints));
+    slices_in_fallback_.push_back(IsPoolInFallback(slice.endpoints));
   }
   fallback_pool_in_fallback_ = IsPoolInFallback(slice_map_->fallback_pool());
 }
@@ -607,7 +644,7 @@ AutoSharding::PickResult AutoSharding::Picker::Pick(PickArgs args) {
   }
   // If the matching key range is in fallback mode and fallback is enabled,
   // route to the fallback pool.
-  if (slice_in_fallback_[*slice_index] && fallback_enabled_) {
+  if (slices_in_fallback_[*slice_index] && fallback_enabled_) {
     return PickFromEndpointIndices(slice_map_->fallback_pool(), args);
   }
   // Delegate to the endpoints assigned to the matching key range.  When the
@@ -1030,6 +1067,16 @@ RefCountedPtr<AutoSharding::SliceMap> AutoSharding::BuildSliceMapLocked()
   // no slices.
   if (!assignment_.has_value()) return slice_map;
   slice_map->SetGeneration(assignment_->generation);
+  // Precompute a map from assignment endpoint index to EndpointState.index
+  // to avoid repeated map lookups per slice endpoint.
+  std::vector<std::optional<size_t>> assignment_endpoint_to_picker_index(
+      assignment_->endpoint_names.size(), std::nullopt);
+  for (size_t i = 0; i < assignment_->endpoint_names.size(); ++i) {
+    auto it = endpoint_map_.find(assignment_->endpoint_names[i]);
+    if (it != endpoint_map_.end()) {
+      assignment_endpoint_to_picker_index[i] = it->second->index();
+    }
+  }
   // Build an Entry for each Slice in the assignment.
   for (const auto& slice : assignment_->slices) {
     SliceMap::Entry entry;
@@ -1037,17 +1084,15 @@ RefCountedPtr<AutoSharding::SliceMap> AutoSharding::BuildSliceMapLocked()
     entry.end_key = slice.end_key;
     entry.endpoints.reserve(slice.endpoints.size());
     for (size_t idx : slice.endpoints) {
-      // Map index -> hostname -> EndpointState.index.
-      // Drop hostnames not present in the endpoint map.
-      const std::string& hostname = assignment_->endpoint_names[idx];
-      auto it = endpoint_map_.find(hostname);
-      if (it != endpoint_map_.end()) {
-        entry.endpoints.push_back(it->second->index());
+      if (idx < assignment_endpoint_to_picker_index.size() &&
+          assignment_endpoint_to_picker_index[idx].has_value()) {
+        entry.endpoints.push_back(*assignment_endpoint_to_picker_index[idx]);
       }
     }
     slice_map->AddSlice(std::move(entry));
   }
   slice_map->SortSlices();
+  slice_map->CheckSliceMap();
   return slice_map;
 }
 

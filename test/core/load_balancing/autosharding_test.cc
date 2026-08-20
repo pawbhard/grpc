@@ -218,6 +218,16 @@ TEST_F(AutoShardingTest, ConfigFailsWithoutSliceKeyHeader) {
   EXPECT_FALSE(config.ok());
 }
 
+TEST_F(AutoShardingTest, EmptySliceKeyHeaderValue) {
+  auto picker = ApplyUpdateAndExpectIdle(kAddresses, MakeAutoShardingConfig());
+  // Expire the initial assignment timer.
+  IncrementTimeBy(Duration::Seconds(1));
+  picker = ExpectState(GRPC_CHANNEL_IDLE);
+  const std::map<std::string, std::string> empty_key_metadata = {
+      {"x-slice-key", ""}};
+  ExpectPickQueued(picker.get(), {}, empty_key_metadata);
+}
+
 TEST_F(AutoShardingTest, ConfigFailsWithZeroInitialAssignmentTimeout) {
   auto config =
       CoreConfiguration::Get().lb_policy_registry().ParseLoadBalancingConfig(
