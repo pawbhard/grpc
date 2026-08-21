@@ -95,9 +95,7 @@ class AutoShardingLbConfig final : public LoadBalancingPolicy::Config {
     return channel_factory_key_;
   }
   const std::string& slicing_target() const { return slicing_target_; }
-  const std::string& slice_key_header_name() const {
-    return slice_key_header_name_;
-  }
+  const std::string& slice_key_header() const { return slice_key_header_; }
   bool enable_fallback() const { return enable_fallback_; }
   Duration initial_assignment_timeout() const {
     return initial_assignment_timeout_;
@@ -111,7 +109,8 @@ class AutoShardingLbConfig final : public LoadBalancingPolicy::Config {
             .OptionalField("slicingTarget",
                            &AutoShardingLbConfig::slicing_target_)
             .OptionalField("sliceKeyHeaderName",
-                           &AutoShardingLbConfig::slice_key_header_name_)
+                           &AutoShardingLbConfig::slice_key_header_,
+                           "slice_key_header_name")
             .OptionalField("enableFallback",
                            &AutoShardingLbConfig::enable_fallback_)
             .OptionalField("initialAssignmentTimeout",
@@ -123,7 +122,7 @@ class AutoShardingLbConfig final : public LoadBalancingPolicy::Config {
   void JsonPostLoad(const Json&, const JsonArgs&, ValidationErrors* errors) {
     {
       ValidationErrors::ScopedField field(errors, ".sliceKeyHeaderName");
-      if (!errors->FieldHasErrors() && slice_key_header_name_.empty()) {
+      if (!errors->FieldHasErrors() && slice_key_header_.empty()) {
         errors->AddError("must be non-empty");
       }
     }
@@ -146,7 +145,7 @@ class AutoShardingLbConfig final : public LoadBalancingPolicy::Config {
  private:
   std::string channel_factory_key_;
   std::string slicing_target_;
-  std::string slice_key_header_name_;
+  std::string slice_key_header_;
   bool enable_fallback_ = false;
   Duration initial_assignment_timeout_ = kDefaultInitialAssignmentTimeout;
 };
@@ -340,8 +339,8 @@ class AutoSharding final : public LoadBalancingPolicy {
       : public InternallyRefCounted<AutoShardingEndpoint> {
    public:
     // index is the index of this endpoint within the Name Resolver update.
-    AutoShardingEndpoint(RefCountedPtr<AutoSharding> policy, size_t index)
-        : policy_(std::move(policy)), index_(index) {}
+    AutoShardingEndpoint(RefCountedPtr<AutoSharding> autosharding, size_t index)
+        : autosharding_(std::move(autosharding)), index_(index) {}
 
     void Orphan() override;
 
@@ -382,7 +381,7 @@ class AutoSharding final : public LoadBalancingPolicy {
                        RefCountedPtr<SubchannelPicker> picker);
 
     // Ref to our parent.
-    RefCountedPtr<AutoSharding> policy_;
+    RefCountedPtr<AutoSharding> autosharding_;
     size_t index_;  // Index of this endpoint within the Name Resolver update.
 
     // The pick_first child policy.  Created lazily, on first use.
@@ -400,7 +399,7 @@ class AutoSharding final : public LoadBalancingPolicy {
   class InitialAssignmentTimer final
       : public InternallyRefCounted<InitialAssignmentTimer> {
    public:
-    InitialAssignmentTimer(RefCountedPtr<AutoSharding> policy,
+    InitialAssignmentTimer(RefCountedPtr<AutoSharding> autosharding,
                            Duration timeout);
 
     void Orphan() override;
@@ -408,14 +407,14 @@ class AutoSharding final : public LoadBalancingPolicy {
    private:
     void OnTimerLocked();
 
-    RefCountedPtr<AutoSharding> policy_;
+    RefCountedPtr<AutoSharding> autosharding_;
     std::optional<grpc_event_engine::experimental::EventEngine::TaskHandle>
         timer_handle_;
   };
 
   class Picker final : public SubchannelPicker {
    public:
-    Picker(RefCountedPtr<AutoSharding> policy,
+    Picker(RefCountedPtr<AutoSharding> autosharding,
            RefCountedPtr<SliceMap> slice_map, bool assignment_pending);
 
     PickResult Pick(PickArgs args) override;
@@ -423,15 +422,15 @@ class AutoSharding final : public LoadBalancingPolicy {
    private:
     // Snapshot of the state of a single endpoint, ordered 1:1 by
     // EndpointState.index.
-    using PickerEndpoint = AutoShardingEndpoint::EndpointInfo;
 
     // A fire-and-forget class that schedules endpoint connection attempts
     // on the control plane WorkSerializer.
     class EndpointConnectionAttempter final {
      public:
-      EndpointConnectionAttempter(RefCountedPtr<AutoSharding> policy,
+      EndpointConnectionAttempter(RefCountedPtr<AutoSharding> autosharding,
                                   RefCountedPtr<AutoShardingEndpoint> endpoint)
-          : policy_(std::move(policy)), endpoint_(std::move(endpoint)) {
+          : autosharding_(std::move(autosharding)),
+            endpoint_(std::move(endpoint)) {
         // Hop into ExecCtx, so that we're not holding the data plane mutex
         // while we run control-plane code.
         GRPC_CLOSURE_INIT(&closure_, RunInExecCtx, this, nullptr);
@@ -441,15 +440,15 @@ class AutoSharding final : public LoadBalancingPolicy {
      private:
       static void RunInExecCtx(void* arg, grpc_error_handle /*error*/) {
         auto* self = static_cast<EndpointConnectionAttempter*>(arg);
-        self->policy_->work_serializer()->Run([self]() {
-          if (!self->policy_->shutdown_) {
+        self->autosharding_->work_serializer()->Run([self]() {
+          if (!self->autosharding_->shutdown_) {
             self->endpoint_->RequestConnectionLocked();
           }
           delete self;
         });
       }
 
-      RefCountedPtr<AutoSharding> policy_;
+      RefCountedPtr<AutoSharding> autosharding_;
       RefCountedPtr<AutoShardingEndpoint> endpoint_;
       grpc_closure closure_;
     };
@@ -463,15 +462,13 @@ class AutoSharding final : public LoadBalancingPolicy {
     PickResult PickFromEndpointIndices(const std::vector<size_t>& indices,
                                        PickArgs args);
 
-    RefCountedPtr<AutoSharding> policy_;
+    RefCountedPtr<AutoSharding> autosharding_;
     RefCountedPtr<SliceMap> slice_map_;
     // Snapshot of the endpoint states, indexed by EndpointState.index.
-    std::vector<PickerEndpoint> endpoints_;
+    std::vector<AutoShardingEndpoint::EndpointInfo> endpoints_;
     // Precomputed per-slice in-fallback status.
     std::vector<bool> slices_in_fallback_;
-    // Precomputed fallback pool in-fallback status.
-    bool fallback_pool_in_fallback_ = true;
-    RefCountedStringValue slice_key_header_name_;
+    RefCountedStringValue slice_key_header_;
     std::string resolution_note_;
     bool fallback_enabled_ = false;
     // True while the policy is waiting for the initial assignment from the
@@ -525,7 +522,7 @@ class AutoSharding final : public LoadBalancingPolicy {
   // Current SliceMap.  Immutable; shared with the current picker.
   RefCountedPtr<SliceMap> slice_map_;
   // Config.
-  RefCountedStringValue slice_key_header_name_;
+  RefCountedStringValue slice_key_header_;
   bool fallback_enabled_ = false;
   Duration initial_assignment_timeout_ = kDefaultInitialAssignmentTimeout;
   std::string channel_factory_key_;
@@ -554,21 +551,21 @@ class AutoSharding final : public LoadBalancingPolicy {
 // AutoSharding::Picker
 //
 
-AutoSharding::Picker::Picker(RefCountedPtr<AutoSharding> policy,
+AutoSharding::Picker::Picker(RefCountedPtr<AutoSharding> autosharding,
                              RefCountedPtr<SliceMap> slice_map,
                              bool assignment_pending)
-    : policy_(std::move(policy)),
+    : autosharding_(std::move(autosharding)),
       slice_map_(std::move(slice_map)),
-      endpoints_(policy_->endpoints_.size()),
-      slice_key_header_name_(policy_->slice_key_header_name_),
-      resolution_note_(policy_->resolution_note_),
-      fallback_enabled_(policy_->fallback_enabled_),
+      endpoints_(autosharding_->endpoints_.size()),
+      slice_key_header_(autosharding_->slice_key_header_),
+      resolution_note_(autosharding_->resolution_note_),
+      fallback_enabled_(autosharding_->fallback_enabled_),
       assignment_pending_(assignment_pending) {
   // Build an immutable snapshot of the PickerEndpoints, ordered 1:1 by
   // EndpointState.index.
   std::vector<std::pair<size_t, AutoShardingEndpoint*>> endpoint_indices;
-  endpoint_indices.reserve(policy_->endpoint_map_.size());
-  for (const auto& [_, endpoint] : policy_->endpoint_map_) {
+  endpoint_indices.reserve(autosharding_->endpoint_map_.size());
+  for (const auto& [_, endpoint] : autosharding_->endpoint_map_) {
     endpoint_indices.emplace_back(endpoint->index(), endpoint.get());
   }
   std::sort(
@@ -581,7 +578,7 @@ AutoSharding::Picker::Picker(RefCountedPtr<AutoSharding> policy,
   // duplicated by a later endpoint in the resolver update.  They are never
   // referenced by the SliceMap or the fallback pool, but mark them as
   // SHUTDOWN defensively, in case of a bug.
-  for (PickerEndpoint& endpoint : endpoints_) {
+  for (AutoShardingEndpoint::EndpointInfo& endpoint : endpoints_) {
     if (endpoint.endpoint == nullptr) {
       endpoint.state = GRPC_CHANNEL_SHUTDOWN;
     }
@@ -591,7 +588,6 @@ AutoSharding::Picker::Picker(RefCountedPtr<AutoSharding> policy,
   for (const auto& slice : slice_map_->slices()) {
     slices_in_fallback_.push_back(IsPoolInFallback(slice.endpoints));
   }
-  fallback_pool_in_fallback_ = IsPoolInFallback(slice_map_->fallback_pool());
 }
 
 bool AutoSharding::Picker::IsPoolInFallback(
@@ -620,12 +616,12 @@ AutoSharding::PickResult AutoSharding::Picker::Pick(PickArgs args) {
   }
   // Extract the sharding key from the request metadata.
   std::string buffer;
-  auto key = args.initial_metadata->Lookup(
-      slice_key_header_name_.as_string_view(), &buffer);
+  auto key = args.initial_metadata->Lookup(slice_key_header_.as_string_view(),
+                                           &buffer);
   if (!key.has_value()) {
-    return PickResult::Fail(absl::InternalError(absl::StrCat(
-        "slice key header \"", slice_key_header_name_.as_string_view(),
-        "\" not present")));
+    return PickResult::Fail(absl::InternalError(
+        absl::StrCat("slice key header \"", slice_key_header_.as_string_view(),
+                     "\" not present")));
   }
   // Look up the slice covering the key.
   std::optional<size_t> slice_index = slice_map_->Lookup(*key);
@@ -667,42 +663,26 @@ AutoSharding::PickResult AutoSharding::Picker::PickFromEndpointIndices(
   }
   // Pick a random starting index within the pool.
   size_t first_index = absl::Uniform<size_t>(SharedBitGen(), 0, indices.size());
-  bool requested_connection = false;
-  bool found_connecting = false;
-  // Iterate through candidate endpoints starting at first_index.
   for (size_t i = 0; i < indices.size(); ++i) {
-    const PickerEndpoint& endpoint =
+    const auto& endpoint =
         endpoints_[indices[(first_index + i) % indices.size()]];
     switch (endpoint.state) {
       case GRPC_CHANNEL_READY:
-        // If READY, use immediately (happy path).
         return endpoint.picker->Pick(args);
-      case GRPC_CHANNEL_CONNECTING:
-        // Record if we see a CONNECTING endpoint.
-        found_connecting = true;
-        break;
       case GRPC_CHANNEL_IDLE:
-        // If IDLE, trigger a connection on the child LB (at most one per
-        // pick).
-        if (!requested_connection) {
-          new EndpointConnectionAttempter(
-              policy_.Ref(DEBUG_LOCATION, "EndpointConnectionAttempter"),
-              endpoint.endpoint);
-          requested_connection = true;
-        }
-        break;
+        new EndpointConnectionAttempter(
+            autosharding_.Ref(DEBUG_LOCATION, "EndpointConnectionAttempter"),
+            endpoint.endpoint);
+        [[fallthrough]];
+      case GRPC_CHANNEL_CONNECTING:
+        return PickResult::Queue();
       default:
-        break;  // TRANSIENT_FAILURE.
+        break;
     }
-  }
-  // If no READY endpoint was found, but we requested a connection or found a
-  // CONNECTING endpoint, queue the pick.
-  if (requested_connection || found_connecting) {
-    return PickResult::Queue();
   }
   // All endpoints are in TRANSIENT_FAILURE.  Fail by delegating to the
   // randomly picked endpoint's picker to yield a detailed error message.
-  const PickerEndpoint& endpoint = endpoints_[indices[first_index]];
+  const auto& endpoint = endpoints_[indices[first_index]];
   if (endpoint.picker != nullptr) {
     return endpoint.picker->Pick(args);
   }
@@ -714,25 +694,28 @@ AutoSharding::PickResult AutoSharding::Picker::PickFromEndpointIndices(
 //
 
 AutoSharding::InitialAssignmentTimer::InitialAssignmentTimer(
-    RefCountedPtr<AutoSharding> policy, Duration timeout)
-    : policy_(std::move(policy)) {
+    RefCountedPtr<AutoSharding> autosharding, Duration timeout)
+    : autosharding_(std::move(autosharding)) {
   GRPC_TRACE_LOG(autosharding_lb, INFO)
-      << "[AS " << policy_.get() << "] starting initial assignment timer for "
-      << timeout.millis() << "ms";
-  timer_handle_ = policy_->channel_control_helper()->GetEventEngine()->RunAfter(
-      timeout, [self = Ref(DEBUG_LOCATION, "Timer")]() mutable {
-        ExecCtx exec_ctx;
-        auto self_ptr = self.get();
-        self_ptr->policy_->work_serializer()->Run(
-            [self = std::move(self)]() { self->OnTimerLocked(); });
-      });
+      << "[AS " << autosharding_.get()
+      << "] starting initial assignment timer for " << timeout.millis() << "ms";
+  timer_handle_ =
+      autosharding_->channel_control_helper()->GetEventEngine()->RunAfter(
+          timeout, [self = Ref(DEBUG_LOCATION, "Timer")]() mutable {
+            ExecCtx exec_ctx;
+            auto self_ptr = self.get();
+            self_ptr->autosharding_->work_serializer()->Run(
+                [self = std::move(self)]() { self->OnTimerLocked(); });
+          });
 }
 
 void AutoSharding::InitialAssignmentTimer::Orphan() {
   if (timer_handle_.has_value()) {
     GRPC_TRACE_LOG(autosharding_lb, INFO)
-        << "[AS " << policy_.get() << "] cancelling initial assignment timer";
-    policy_->channel_control_helper()->GetEventEngine()->Cancel(*timer_handle_);
+        << "[AS " << autosharding_.get()
+        << "] cancelling initial assignment timer";
+    autosharding_->channel_control_helper()->GetEventEngine()->Cancel(
+        *timer_handle_);
     timer_handle_.reset();
   }
   Unref();
@@ -741,7 +724,7 @@ void AutoSharding::InitialAssignmentTimer::Orphan() {
 void AutoSharding::InitialAssignmentTimer::OnTimerLocked() {
   if (!timer_handle_.has_value()) return;  // Already fired or cancelled.
   timer_handle_.reset();
-  policy_->OnInitialAssignmentTimeoutLocked();
+  autosharding_->OnInitialAssignmentTimeoutLocked();
 }
 
 //
@@ -764,7 +747,7 @@ class AutoSharding::AutoShardingEndpoint::Helper final
 
  private:
   LoadBalancingPolicy::ChannelControlHelper* parent_helper() const override {
-    return endpoint_->policy_->channel_control_helper();
+    return endpoint_->autosharding_->channel_control_helper();
   }
 
   RefCountedPtr<AutoShardingEndpoint> endpoint_;
@@ -778,7 +761,7 @@ void AutoSharding::AutoShardingEndpoint::Orphan() {
   if (child_policy_ != nullptr) {
     // Remove pollset_set linkage.
     grpc_pollset_set_del_pollset_set(child_policy_->interested_parties(),
-                                     policy_->interested_parties());
+                                     autosharding_->interested_parties());
     child_policy_.reset();
     picker_.reset();
   }
@@ -806,9 +789,9 @@ void AutoSharding::AutoShardingEndpoint::RequestConnectionLocked() {
 void AutoSharding::AutoShardingEndpoint::CreateChildPolicy() {
   GRPC_CHECK(child_policy_ == nullptr);
   LoadBalancingPolicy::Args lb_policy_args;
-  lb_policy_args.work_serializer = policy_->work_serializer();
+  lb_policy_args.work_serializer = autosharding_->work_serializer();
   lb_policy_args.args =
-      policy_->args_
+      autosharding_->args_
           .Set(GRPC_ARG_INTERNAL_PICK_FIRST_ENABLE_HEALTH_CHECKING, true)
           .Set(GRPC_ARG_INTERNAL_PICK_FIRST_OMIT_STATUS_MESSAGE_PREFIX, true);
   lb_policy_args.channel_control_helper =
@@ -817,17 +800,17 @@ void AutoSharding::AutoShardingEndpoint::CreateChildPolicy() {
       CoreConfiguration::Get().lb_policy_registry().CreateLoadBalancingPolicy(
           "pick_first", std::move(lb_policy_args));
   if (GRPC_TRACE_FLAG_ENABLED(autosharding_lb)) {
-    const EndpointAddresses& endpoint = policy_->endpoints_[index_];
-    LOG(INFO) << "[AS " << policy_.get() << "] endpoint " << this << " (index "
-              << index_ << " of " << policy_->endpoints_.size() << ", "
-              << endpoint.ToString() << "): created child policy "
-              << child_policy_.get();
+    const EndpointAddresses& endpoint = autosharding_->endpoints_[index_];
+    LOG(INFO) << "[AS " << autosharding_.get() << "] endpoint " << this
+              << " (index " << index_ << " of "
+              << autosharding_->endpoints_.size() << ", " << endpoint.ToString()
+              << "): created child policy " << child_policy_.get();
   }
   // Add our interested_parties pollset_set to that of the newly created
   // child policy. This will make the child policy progress upon activity on
   // this policy, which in turn is tied to the application's call.
   grpc_pollset_set_add_pollset_set(child_policy_->interested_parties(),
-                                   policy_->interested_parties());
+                                   autosharding_->interested_parties());
   // If the child policy returns a non-OK status, request re-resolution.
   // Note that this will initially cause fixed backoff delay in the
   // resolver instead of exponential delay.  However, once the
@@ -836,7 +819,7 @@ void AutoSharding::AutoShardingEndpoint::CreateChildPolicy() {
   // exponential backoff instead.
   absl::Status status = UpdateChildPolicyLocked();
   if (!status.ok()) {
-    policy_->channel_control_helper()->RequestReresolution();
+    autosharding_->channel_control_helper()->RequestReresolution();
   }
 }
 
@@ -849,9 +832,9 @@ absl::Status AutoSharding::AutoShardingEndpoint::UpdateChildPolicyLocked() {
   GRPC_CHECK(config.ok());
   // Update child policy.
   LoadBalancingPolicy::UpdateArgs update_args;
-  update_args.addresses =
-      std::make_shared<SingleEndpointIterator>(policy_->endpoints_[index_]);
-  update_args.args = policy_->args_;
+  update_args.addresses = std::make_shared<SingleEndpointIterator>(
+      autosharding_->endpoints_[index_]);
+  update_args.args = autosharding_->args_;
   update_args.config = std::move(*config);
   return child_policy_->UpdateLocked(std::move(update_args));
 }
@@ -860,8 +843,8 @@ void AutoSharding::AutoShardingEndpoint::OnStateUpdate(
     grpc_connectivity_state new_state, const absl::Status& status,
     RefCountedPtr<SubchannelPicker> picker) {
   GRPC_TRACE_LOG(autosharding_lb, INFO)
-      << "[AS " << policy_.get() << "] connectivity changed for endpoint "
-      << this << " (" << policy_->endpoints_[index_].ToString()
+      << "[AS " << autosharding_.get() << "] connectivity changed for endpoint "
+      << this << " (" << autosharding_->endpoints_[index_].ToString()
       << ", child_policy=" << child_policy_.get()
       << "): prev_state=" << ConnectivityStateName(connectivity_state_)
       << " new_state=" << ConnectivityStateName(new_state) << " (" << status
@@ -872,7 +855,7 @@ void AutoSharding::AutoShardingEndpoint::OnStateUpdate(
   status_ = status;
   picker_ = std::move(picker);
   // Update the aggregated connectivity state.
-  policy_->UpdateAggregatedConnectivityStateLocked(status);
+  autosharding_->UpdateAggregatedConnectivityStateLocked(status);
 }
 
 //
@@ -925,8 +908,7 @@ absl::Status AutoSharding::UpdateLocked(UpdateArgs args) {
   args_ = std::move(args.args);
   // Save config.
   auto* config = DownCast<AutoShardingLbConfig*>(args.config.get());
-  slice_key_header_name_ =
-      RefCountedStringValue(config->slice_key_header_name());
+  slice_key_header_ = RefCountedStringValue(config->slice_key_header());
   fallback_enabled_ = config->enable_fallback();
   initial_assignment_timeout_ = config->initial_assignment_timeout();
   // If the channel factory key has changed (or if this is the first
