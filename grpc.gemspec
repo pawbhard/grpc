@@ -1854,6 +1854,8 @@ Gem::Specification.new do |s|
   s.files += %w( src/core/lib/transport/transport_op_string.cc )
   s.files += %w( src/core/load_balancing/address_filtering.cc )
   s.files += %w( src/core/load_balancing/address_filtering.h )
+  s.files += %w( src/core/load_balancing/autosharding/autoshard.cc )
+  s.files += %w( src/core/load_balancing/autosharding/autoshard.h )
   s.files += %w( src/core/load_balancing/backend_metric_data.h )
   s.files += %w( src/core/load_balancing/backend_metric_parser.cc )
   s.files += %w( src/core/load_balancing/backend_metric_parser.h )
