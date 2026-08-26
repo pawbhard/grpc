@@ -154,10 +154,6 @@ class AutoShardingLbConfig final : public LoadBalancingPolicy::Config {
 // autosharding LB policy
 //
 
-namespace testing {
-class AutoShardingTest;
-}
-
 class AutoSharding final : public LoadBalancingPolicy {
  public:
   explicit AutoSharding(Args args);
@@ -166,8 +162,6 @@ class AutoSharding final : public LoadBalancingPolicy {
 
   absl::Status UpdateLocked(UpdateArgs args) override;
   void ResetBackoffLocked() override;
-
-  friend class testing::AutoShardingTest;
 
  private:
   //
@@ -257,47 +251,86 @@ class AutoSharding final : public LoadBalancingPolicy {
       }
     };
 
-    void SetFallbackPool(std::vector<size_t> fallback_pool) {
-      fallback_pool_ = std::move(fallback_pool);
-    }
+    SliceMap() = default;
 
-    void AddSlice(Entry entry) { slices_.push_back(std::move(entry)); }
-
-    void SortSlices() {
+    // Constructs a SliceMap with the given slices, fallback pool, and
+    // generation.  The slices are sorted by exclusive end_key (using
+    // EndKeyLessThan) so that Lookup() can binary-search them.
+    SliceMap(std::vector<Entry> slices, std::vector<size_t> fallback_pool,
+             int64_t generation)
+        : slices_(std::move(slices)),
+          fallback_pool_(std::move(fallback_pool)),
+          generation_(generation) {
       std::sort(slices_.begin(), slices_.end(),
                 [](const Entry& lhs, const Entry& rhs) {
                   return EndKeyLessThan()(lhs.end_key, rhs.end_key);
                 });
     }
 
-    // Validates that slice key ranges do not overlap and cover key space
-    // cleanly.
-    void CheckSliceMap() const {
+    // Validates that the given assignment can be used to build a valid
+    // SliceMap: the slice key ranges must not overlap and must cover the
+    // keyspace cleanly (with no gaps between consecutive slices), and all
+    // endpoint indices referenced by the slices must be valid indices into
+    // the assignment's endpoint names list.  Returns an error status
+    // otherwise.
+    static absl::Status CheckSliceMap(const Assignment& assignment) {
+      // Sort a copy of the slices by exclusive end_key so that consecutive
+      // slices can be checked for overlaps and gaps.
+      std::vector<SliceAssignment> sorted_slices = assignment.slices;
+      std::sort(sorted_slices.begin(), sorted_slices.end(),
+                [](const SliceAssignment& lhs, const SliceAssignment& rhs) {
+                  return EndKeyLessThan()(lhs.end_key, rhs.end_key);
+                });
       bool contains_overlap = false;
       bool contains_gap = false;
       absl::string_view prev_end;
       bool first = true;
-      for (const auto& entry : slices_) {
+      // TODO(bpawan): This check only detects gaps and overlaps between
+      // consecutive slices.  It does not currently detect a gap at the
+      // beginning of the keyspace (if the first slice does not start at
+      // -infinity) or a gap at the end of the keyspace (if the last slice
+      // does not end at +infinity).
+      for (const auto& slice : sorted_slices) {
+        // Reject empty or reversed key ranges, which can never match any
+        // key.
+        if (!slice.start_key.empty() && !slice.end_key.empty() &&
+            slice.start_key >= slice.end_key) {
+          return absl::InvalidArgumentError(
+              "slice key range is empty or reversed");
+        }
         if (!first) {
-          if (!entry.start_key.empty() && !prev_end.empty() &&
-              entry.start_key < prev_end) {
+          if (!slice.start_key.empty() && !prev_end.empty() &&
+              slice.start_key < prev_end) {
             contains_overlap = true;
-          } else if (entry.start_key != prev_end) {
+          } else if (slice.start_key != prev_end) {
             contains_gap = true;
           }
         }
-        prev_end = entry.end_key;
+        prev_end = slice.end_key;
         first = false;
       }
       if (contains_overlap) {
-        LOG(ERROR) << "SliceMap contains overlapping key ranges";
-      } else if (contains_gap) {
-        GRPC_TRACE_LOG(autosharding_lb, INFO)
-            << "SliceMap contains gaps in key ranges";
+        return absl::InvalidArgumentError(
+            "SliceMap contains overlapping key ranges");
       }
+      if (contains_gap) {
+        return absl::InvalidArgumentError(
+            "SliceMap contains gaps in key ranges");
+      }
+      // Ensure that all endpoint indices referenced by the slices are valid
+      // indices into the assignment's endpoint names list.
+      for (const auto& slice : assignment.slices) {
+        for (size_t idx : slice.endpoints) {
+          if (idx >= assignment.endpoint_names.size()) {
+            return absl::InvalidArgumentError(absl::StrCat(
+                "slice contains invalid endpoint index ", idx,
+                " (assignment has ", assignment.endpoint_names.size(),
+                " endpoint names)"));
+          }
+        }
+      }
+      return absl::OkStatus();
     }
-
-    void SetGeneration(int64_t generation) { generation_ = generation; }
 
     // Sorted by exclusive end_key using EndKeyLessThan.
     const std::vector<Entry>& slices() const { return slices_; }
@@ -458,7 +491,9 @@ class AutoSharding final : public LoadBalancingPolicy {
     bool IsPoolInFallback(const std::vector<size_t>& indices) const;
 
     // Picks an endpoint from the pool of endpoints given by indices,
-    // starting at a random position within the pool.
+    // starting at a random position within the pool and scanning the entire
+    // pool for a READY endpoint, triggering at most one connection attempt
+    // on an IDLE endpoint along the way.
     PickResult PickFromEndpointIndices(const std::vector<size_t>& indices,
                                        PickArgs args);
 
@@ -497,6 +532,12 @@ class AutoSharding final : public LoadBalancingPolicy {
   // with the OSS DynamicSharding gRPC protocol.
   void CreateShardingServiceChannelLocked();
 
+  // Restarts the initial assignment timer.  If has_valid_assignment is true,
+  // the policy keeps using the current assignment while waiting for a new
+  // one from the sharding service; otherwise, RPCs are queued until a new
+  // assignment is received or the timer expires.
+  void RestartInitialAssignmentTimerLocked(bool has_valid_assignment);
+
   // Builds a new SliceMap from the current EndpointMap and the most recent
   // Assignment (if any).
   RefCountedPtr<SliceMap> BuildSliceMapLocked() const;
@@ -504,12 +545,17 @@ class AutoSharding final : public LoadBalancingPolicy {
   // Called when the initial assignment timer fires.
   void OnInitialAssignmentTimeoutLocked();
 
-  // Called by the (future) "Shard" stream when a valid assignment is
-  // received from the sharding service.
+  // Called by the (future) "Shard" stream when an assignment is received
+  // from the sharding service.
+  //
+  // Validates the assignment, and returns a non-OK status if it is invalid,
+  // in which case the caller is expected to NACK the update (in the
+  // protocol) and the policy will continue using the previous assignment,
+  // if any.
   //
   // TODO(bpawan): Not yet wired up; will be invoked by the stream code once
   // the OSS DynamicSharding gRPC protocol is implemented in C++.
-  void OnAssignmentReceived(Assignment assignment);
+  absl::Status OnAssignmentReceived(Assignment assignment);
 
   // Endpoint map: endpoint hostname -> endpoint state.
   std::map<std::string, OrphanablePtr<AutoShardingEndpoint>> endpoint_map_;
@@ -563,16 +609,8 @@ AutoSharding::Picker::Picker(RefCountedPtr<AutoSharding> autosharding,
       assignment_pending_(assignment_pending) {
   // Build an immutable snapshot of the PickerEndpoints, ordered 1:1 by
   // EndpointState.index.
-  std::vector<std::pair<size_t, AutoShardingEndpoint*>> endpoint_indices;
-  endpoint_indices.reserve(autosharding_->endpoint_map_.size());
   for (const auto& [_, endpoint] : autosharding_->endpoint_map_) {
-    endpoint_indices.emplace_back(endpoint->index(), endpoint.get());
-  }
-  std::sort(
-      endpoint_indices.begin(), endpoint_indices.end(),
-      [](const auto& lhs, const auto& rhs) { return lhs.first < rhs.first; });
-  for (const auto& [index, endpoint] : endpoint_indices) {
-    endpoints_[index] = endpoint->GetInfoForPicker();
+    endpoints_[endpoint->index()] = endpoint->GetInfoForPicker();
   }
   // Any slots not filled above correspond to endpoints whose hostname was
   // duplicated by a later endpoint in the resolver update.  They are never
@@ -626,9 +664,10 @@ AutoSharding::PickResult AutoSharding::Picker::Pick(PickArgs args) {
   // Look up the slice covering the key.
   std::optional<size_t> slice_index = slice_map_->Lookup(*key);
   if (!slice_index.has_value()) {
-    // No slice covers this key.  This is only possible when the initial
-    // assignment timer has expired and no valid assignments have been
-    // received from the sharding service.
+    // No slice covers this key.  This can happen if no valid assignment has
+    // been received yet (i.e., the initial assignment timer has expired), or
+    // if the key falls in a gap between slices in an assignment that was
+    // accepted despite the gap (see the TODO in CheckSliceMap()).
     if (fallback_enabled_) {
       return PickFromEndpointIndices(slice_map_->fallback_pool(), args);
     }
@@ -661,24 +700,40 @@ AutoSharding::PickResult AutoSharding::Picker::PickFromEndpointIndices(
     }
     return PickResult::Fail(absl::UnavailableError(message));
   }
-  // Pick a random starting index within the pool.
+  // Pick a random starting index within the pool, and scan the entire pool
+  // for a READY endpoint, triggering at most one connection attempt on an
+  // IDLE endpoint along the way.  This is the same approach used by the
+  // ring_hash policy's random-hash path, so that a pick completes as soon
+  // as any endpoint in the pool is READY.
   size_t first_index = absl::Uniform<size_t>(SharedBitGen(), 0, indices.size());
+  bool requested_connection = false;
+  bool found_connecting = false;
   for (size_t i = 0; i < indices.size(); ++i) {
     const auto& endpoint =
         endpoints_[indices[(first_index + i) % indices.size()]];
     switch (endpoint.state) {
       case GRPC_CHANNEL_READY:
         return endpoint.picker->Pick(args);
-      case GRPC_CHANNEL_IDLE:
-        new EndpointConnectionAttempter(
-            autosharding_.Ref(DEBUG_LOCATION, "EndpointConnectionAttempter"),
-            endpoint.endpoint);
-        [[fallthrough]];
       case GRPC_CHANNEL_CONNECTING:
-        return PickResult::Queue();
+        found_connecting = true;
+        break;
+      case GRPC_CHANNEL_IDLE:
+        if (!requested_connection) {
+          new EndpointConnectionAttempter(
+              autosharding_.Ref(DEBUG_LOCATION, "EndpointConnectionAttempter"),
+              endpoint.endpoint);
+          requested_connection = true;
+        }
+        break;
       default:
         break;
     }
+  }
+  // If no READY endpoint was found, but we triggered a connection attempt or
+  // found a CONNECTING endpoint, queue the pick.  It will be retried when
+  // the connection attempt completes.
+  if (requested_connection || found_connecting) {
+    return PickResult::Queue();
   }
   // All endpoints are in TRANSIENT_FAILURE.  Fail by delegating to the
   // randomly picked endpoint's picker to yield a detailed error message.
@@ -914,21 +969,30 @@ absl::Status AutoSharding::UpdateLocked(UpdateArgs args) {
   // If the channel factory key has changed (or if this is the first
   // configuration update), create a new gRPC channel to the sharding service
   // (and a new Shard stream on it).
-  if (!channel_created_ ||
-      config->channel_factory_key() != channel_factory_key_) {
-    channel_factory_key_ = config->channel_factory_key();
-    CreateShardingServiceChannelLocked();
-  } else if (config->slicing_target() != slicing_target_) {
-    // The slicing_target has changed, so create a new Shard stream on the
-    // existing channel.
-    //
-    // TODO(bpawan): Not yet implemented; will be done along with the OSS
-    // DynamicSharding gRPC protocol.
-    GRPC_TRACE_LOG(autosharding_lb, INFO)
-        << "[AS " << this << "] slicing target changed to \""
-        << config->slicing_target() << "\"";
-  }
+  //
+  // Note that the channel_factory_key_ and slicing_target_ members are saved
+  // from the new config before the channel is created, so that the channel
+  // creation code (and the Shard stream that it will create) can access the
+  // new values.
+  const bool channel_factory_key_changed =
+      !channel_created_ || config->channel_factory_key() != channel_factory_key_;
+  const bool slicing_target_changed =
+      config->slicing_target() != slicing_target_;
+  channel_factory_key_ = config->channel_factory_key();
   slicing_target_ = config->slicing_target();
+  if (channel_factory_key_changed) {
+    CreateShardingServiceChannelLocked();
+  } else if (slicing_target_changed) {
+    // The slicing_target has changed, so the assignments for the previous
+    // slicing target are no longer valid.  Discard them and start waiting
+    // for a new assignment from the sharding service.
+    //
+    // TODO(bpawan): A new Shard stream will be created on the existing
+    // channel here, along with the OSS DynamicSharding gRPC protocol.
+    assignment_.reset();
+    slice_map_.reset();
+    RestartInitialAssignmentTimerLocked(/*has_valid_assignment=*/false);
+  }
   // Update endpoint map.
   std::map<std::string, OrphanablePtr<AutoShardingEndpoint>> endpoint_map;
   std::vector<std::string> errors;
@@ -1014,13 +1078,20 @@ void AutoSharding::CreateShardingServiceChannelLocked() {
   //   channel must be closed.
   // - The client_uuid and current_generation values for the Init message sent
   //   on the stream must be tracked here.
-  // Restart the initial assignment timer.
-  initial_assignment_timer_.reset();
   // If we do not have a valid assignment from the previous channel, queue
   // RPCs until we receive one from the new channel or the timer expires.
   // Otherwise, continue using the previous assignment while we wait.
   bool has_valid_assignment =
       slice_map_ != nullptr && !slice_map_->slices().empty();
+  RestartInitialAssignmentTimerLocked(has_valid_assignment);
+}
+
+void AutoSharding::RestartInitialAssignmentTimerLocked(
+    bool has_valid_assignment) {
+  initial_assignment_timer_.reset();
+  // If we do not have a valid assignment, queue RPCs until we receive one
+  // from the sharding service or the timer expires.  Otherwise, continue
+  // using the previous assignment while we wait.
   assignment_pending_ = !has_valid_assignment;
   initial_assignment_timer_ = MakeOrphanable<InitialAssignmentTimer>(
       RefAsSubclass<AutoSharding>(DEBUG_LOCATION, "InitialAssignmentTimer"),
@@ -1029,7 +1100,6 @@ void AutoSharding::CreateShardingServiceChannelLocked() {
 
 RefCountedPtr<AutoSharding::SliceMap> AutoSharding::BuildSliceMapLocked()
     const {
-  auto slice_map = MakeRefCounted<SliceMap>();
   // Populate the fallback pool, deterministically sorted by endpoint index.
   std::vector<std::pair<size_t, AutoShardingEndpoint*>> endpoint_indices;
   endpoint_indices.reserve(endpoint_map_.size());
@@ -1044,11 +1114,13 @@ RefCountedPtr<AutoSharding::SliceMap> AutoSharding::BuildSliceMapLocked()
   for (const auto& [index, _] : endpoint_indices) {
     fallback_pool.push_back(index);
   }
-  slice_map->SetFallbackPool(std::move(fallback_pool));
   // If no assignment has been received yet (startup case), return early with
   // no slices.
-  if (!assignment_.has_value()) return slice_map;
-  slice_map->SetGeneration(assignment_->generation);
+  if (!assignment_.has_value()) {
+    return MakeRefCounted<SliceMap>(std::vector<SliceMap::Entry>(),
+                                    std::move(fallback_pool),
+                                    /*generation=*/0);
+  }
   // Precompute a map from assignment endpoint index to EndpointState.index
   // to avoid repeated map lookups per slice endpoint.
   std::vector<std::optional<size_t>> assignment_endpoint_to_picker_index(
@@ -1060,6 +1132,8 @@ RefCountedPtr<AutoSharding::SliceMap> AutoSharding::BuildSliceMapLocked()
     }
   }
   // Build an Entry for each Slice in the assignment.
+  std::vector<SliceMap::Entry> slices;
+  slices.reserve(assignment_->slices.size());
   for (const auto& slice : assignment_->slices) {
     SliceMap::Entry entry;
     entry.start_key = slice.start_key;
@@ -1071,11 +1145,10 @@ RefCountedPtr<AutoSharding::SliceMap> AutoSharding::BuildSliceMapLocked()
         entry.endpoints.push_back(*assignment_endpoint_to_picker_index[idx]);
       }
     }
-    slice_map->AddSlice(std::move(entry));
+    slices.push_back(std::move(entry));
   }
-  slice_map->SortSlices();
-  slice_map->CheckSliceMap();
-  return slice_map;
+  return MakeRefCounted<SliceMap>(std::move(slices), std::move(fallback_pool),
+                                  assignment_->generation);
 }
 
 void AutoSharding::OnInitialAssignmentTimeoutLocked() {
@@ -1093,20 +1166,42 @@ void AutoSharding::OnInitialAssignmentTimeoutLocked() {
   UpdateAggregatedConnectivityStateLocked(absl::OkStatus());
 }
 
-void AutoSharding::OnAssignmentReceived(Assignment assignment) {
+absl::Status AutoSharding::OnAssignmentReceived(Assignment assignment) {
   GRPC_TRACE_LOG(autosharding_lb, INFO)
       << "[AS " << this << "] received assignment with generation "
       << assignment.generation;
+  // If the assignment is not newer than the one we already have, ignore it.
+  // This can happen if the sharding service resends an assignment after a
+  // stream reconnect, even though the Init message should prevent it.
+  if (assignment_.has_value() &&
+      assignment.generation <= assignment_->generation) {
+    GRPC_TRACE_LOG(autosharding_lb, INFO)
+        << "[AS " << this << "] ignoring stale assignment with generation "
+        << assignment.generation << " (current generation is "
+        << assignment_->generation << ")";
+    return absl::OkStatus();
+  }
+  // Validate the assignment before accepting it.  If it is invalid, reject
+  // it and continue using the previous assignment (if any).  In the
+  // protocol, this is where the caller would NACK the update to the
+  // sharding service.
+  absl::Status status = SliceMap::CheckSliceMap(assignment);
+  if (!status.ok()) {
+    LOG(ERROR) << "[AS " << this << "] rejecting invalid assignment: "
+               << status;
+    return status;
+  }
   // Stop the initial assignment timer, if it is running.
   initial_assignment_timer_.reset();
   assignment_ = std::move(assignment);
   assignment_pending_ = false;
   // If the endpoint list is empty, the channel is already in
   // TRANSIENT_FAILURE, so there is nothing to do here.
-  if (endpoints_.empty()) return;
+  if (endpoints_.empty()) return absl::OkStatus();
   // Build a new SliceMap and report a new picker.
   slice_map_ = BuildSliceMapLocked();
   UpdateAggregatedConnectivityStateLocked(absl::OkStatus());
+  return absl::OkStatus();
 }
 
 void AutoSharding::UpdateAggregatedConnectivityStateLocked(
@@ -1154,7 +1249,7 @@ void AutoSharding::UpdateAggregatedConnectivityStateLocked(
     state = GRPC_CHANNEL_TRANSIENT_FAILURE;
   } else if (num_connecting > 0) {
     state = GRPC_CHANNEL_CONNECTING;
-  } else if (num_transient_failure == 1 && endpoints_.size() > 1) {
+  } else if (num_transient_failure == 1 && endpoint_map_.size() > 1) {
     state = GRPC_CHANNEL_CONNECTING;
   } else if (num_idle > 0) {
     state = GRPC_CHANNEL_IDLE;
@@ -1166,7 +1261,7 @@ void AutoSharding::UpdateAggregatedConnectivityStateLocked(
       << ConnectivityStateName(state) << " (num_idle=" << num_idle
       << ", num_connecting=" << num_connecting << ", num_ready=" << num_ready
       << ", num_transient_failure=" << num_transient_failure
-      << ", size=" << endpoints_.size() << ")";
+      << ", size=" << endpoint_map_.size() << ")";
   // In TRANSIENT_FAILURE, report the last reported failure.
   // Otherwise, report OK.
   if (state == GRPC_CHANNEL_TRANSIENT_FAILURE) {

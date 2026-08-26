@@ -39,6 +39,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 
 namespace grpc_core {
 namespace testing {
@@ -131,26 +132,7 @@ TEST_F(AutoShardingTest, QueuesPicksUntilInitialAssignmentTimeoutExpires) {
   picker = ExpectState(GRPC_CHANNEL_CONNECTING);
   subchannel->SetConnectivityState(GRPC_CHANNEL_READY);
   picker = ExpectState(GRPC_CHANNEL_READY);
-  auto pick_result = DoPick(picker.get(), {}, kSliceKeyMetadata);
-  if (std::holds_alternative<LoadBalancingPolicy::PickResult::Queue>(
-          pick_result.result)) {
-    WaitForWorkSerializerToFlush();
-    WaitForWorkSerializerToFlush();
-    for (absl::string_view address : kAddresses) {
-      auto* sc = FindSubchannel(address);
-      if (sc != nullptr && sc != subchannel) {
-        sc->SetConnectivityState(GRPC_CHANNEL_CONNECTING);
-        picker = ExpectState(GRPC_CHANNEL_READY);
-        sc->SetConnectivityState(GRPC_CHANNEL_READY);
-        picker = ExpectState(GRPC_CHANNEL_READY);
-      }
-    }
-    pick_result = DoPick(picker.get(), {}, kSliceKeyMetadata);
-  }
-  auto* complete = std::get_if<LoadBalancingPolicy::PickResult::Complete>(
-      &pick_result.result);
-  ASSERT_NE(complete, nullptr);
-  auto address = complete->subchannel->address();
+  auto address = ExpectPickComplete(picker.get(), {}, kSliceKeyMetadata);
   EXPECT_THAT(address, ::testing::AnyOf(kAddresses[0], kAddresses[1]));
 }
 
@@ -271,17 +253,6 @@ TEST_F(AutoShardingTest, SameAddressListedMultipleTimes) {
   picker = ExpectState(GRPC_CHANNEL_CONNECTING);
   subchannel->SetConnectivityState(GRPC_CHANNEL_READY);
   picker = ExpectState(GRPC_CHANNEL_READY);
-  for (absl::string_view address :
-       {"ipv4:127.0.0.1:441", "ipv4:127.0.0.1:442"}) {
-    auto* sc = FindSubchannel(address);
-    if (sc != nullptr && sc != subchannel) {
-      sc->SetConnectivityState(GRPC_CHANNEL_CONNECTING);
-      sc->SetConnectivityState(GRPC_CHANNEL_READY);
-      picker = ExpectState(GRPC_CHANNEL_READY);
-    }
-  }
-  WaitForWorkSerializerToFlush();
-  WaitForWorkSerializerToFlush();
   auto address = ExpectPickComplete(picker.get(), {}, metadata);
   ASSERT_TRUE(address.has_value());
 }
@@ -322,18 +293,6 @@ TEST_F(AutoShardingTest, MultipleAddressesPerEndpoint) {
   ExpectPickQueued(picker.get(), {}, metadata);
   subchannel->SetConnectivityState(GRPC_CHANNEL_READY);
   picker = ExpectState(GRPC_CHANNEL_READY);
-  for (absl::string_view address :
-       {"ipv4:127.0.0.1:443", "ipv4:127.0.0.1:444", "ipv4:127.0.0.1:445",
-        "ipv4:127.0.0.1:446"}) {
-    auto* sc = FindSubchannel(address);
-    if (sc != nullptr && sc != subchannel && sc->ConnectionRequested()) {
-      sc->SetConnectivityState(GRPC_CHANNEL_CONNECTING);
-      sc->SetConnectivityState(GRPC_CHANNEL_READY);
-      picker = ExpectState(GRPC_CHANNEL_READY);
-    }
-  }
-  WaitForWorkSerializerToFlush();
-  WaitForWorkSerializerToFlush();
   auto address = ExpectPickComplete(picker.get(), {}, metadata);
   ASSERT_TRUE(address.has_value());
 }
@@ -463,17 +422,10 @@ TEST_F(AutoShardingTest,
   ASSERT_TRUE(address.has_value());
 }
 
-TEST_F(AutoShardingTest, EndpointHashKeys) {
+TEST_F(AutoShardingTest, FallbackWithThreeEndpoints) {
   const std::array<absl::string_view, 3> kAddresses = {
       "ipv4:127.0.0.1:441", "ipv4:127.0.0.1:442", "ipv4:127.0.0.1:443"};
-  const std::array<absl::string_view, 3> kHashKeys = {"foo", "bar", "baz"};
-  std::vector<EndpointAddresses> endpoints;
-  for (size_t i = 0; i < 3; ++i) {
-    endpoints.push_back(MakeEndpointAddresses(
-        {kAddresses[i]},
-        ChannelArgs().Set("grpc.ring_hash.endpoint_hash_key", kHashKeys[i])));
-  }
-  EXPECT_EQ(ApplyUpdate(BuildUpdate(endpoints, MakeAutoShardingConfig()),
+  EXPECT_EQ(ApplyUpdate(BuildUpdate(kAddresses, MakeAutoShardingConfig()),
                         lb_policy()),
             absl::OkStatus());
   auto picker = ExpectState(GRPC_CHANNEL_IDLE);
@@ -498,25 +450,8 @@ TEST_F(AutoShardingTest, EndpointHashKeys) {
   ExpectPickQueued(picker.get(), {}, metadata);
   subchannel->SetConnectivityState(GRPC_CHANNEL_READY);
   picker = ExpectState(GRPC_CHANNEL_READY);
-  auto pick_result = DoPick(picker.get(), {}, metadata);
-  if (std::holds_alternative<LoadBalancingPolicy::PickResult::Queue>(
-          pick_result.result)) {
-    WaitForWorkSerializerToFlush();
-    WaitForWorkSerializerToFlush();
-    for (absl::string_view address : kAddresses) {
-      auto* sc = FindSubchannel(address);
-      if (sc != nullptr && sc != subchannel) {
-        sc->SetConnectivityState(GRPC_CHANNEL_CONNECTING);
-        picker = ExpectState(GRPC_CHANNEL_READY);
-        sc->SetConnectivityState(GRPC_CHANNEL_READY);
-        picker = ExpectState(GRPC_CHANNEL_READY);
-      }
-    }
-    pick_result = DoPick(picker.get(), {}, metadata);
-  }
-  auto* complete = std::get_if<LoadBalancingPolicy::PickResult::Complete>(
-      &pick_result.result);
-  ASSERT_NE(complete, nullptr);
+  auto address = ExpectPickComplete(picker.get(), {}, metadata);
+  ASSERT_TRUE(address.has_value());
 }
 
 TEST_F(AutoShardingTest, ConfigFailsWithZeroInitialAssignmentTimeout) {
