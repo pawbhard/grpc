@@ -1835,6 +1835,8 @@
     <file baseinstalldir="/" name="src/core/lib/transport/transport_op_string.cc" role="src" />
     <file baseinstalldir="/" name="src/core/load_balancing/address_filtering.cc" role="src" />
     <file baseinstalldir="/" name="src/core/load_balancing/address_filtering.h" role="src" />
+    <file baseinstalldir="/" name="src/core/load_balancing/autosharding/autoshard.cc" role="src" />
+    <file baseinstalldir="/" name="src/core/load_balancing/autosharding/autoshard.h" role="src" />
     <file baseinstalldir="/" name="src/core/load_balancing/backend_metric_data.h" role="src" />
     <file baseinstalldir="/" name="src/core/load_balancing/backend_metric_parser.cc" role="src" />
     <file baseinstalldir="/" name="src/core/load_balancing/backend_metric_parser.h" role="src" />

@@ -975,7 +975,8 @@ absl::Status AutoSharding::UpdateLocked(UpdateArgs args) {
   // creation code (and the Shard stream that it will create) can access the
   // new values.
   const bool channel_factory_key_changed =
-      !channel_created_ || config->channel_factory_key() != channel_factory_key_;
+      !channel_created_ ||
+      config->channel_factory_key() != channel_factory_key_;
   const bool slicing_target_changed =
       config->slicing_target() != slicing_target_;
   channel_factory_key_ = config->channel_factory_key();
@@ -1187,8 +1188,8 @@ absl::Status AutoSharding::OnAssignmentReceived(Assignment assignment) {
   // sharding service.
   absl::Status status = SliceMap::CheckSliceMap(assignment);
   if (!status.ok()) {
-    LOG(ERROR) << "[AS " << this << "] rejecting invalid assignment: "
-               << status;
+    LOG(ERROR) << "[AS " << this
+               << "] rejecting invalid assignment: " << status;
     return status;
   }
   // Stop the initial assignment timer, if it is running.
