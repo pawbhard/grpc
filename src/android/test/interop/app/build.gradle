@@ -22,7 +22,12 @@ android {
                 def grpc_cpp_plugin = project.hasProperty('grpc_cpp_plugin') ?
                         project.property('grpc_cpp_plugin') : '/usr/local/bin/grpc_cpp_plugin'
 
-                cppFlags "-std=c++17 -frtti -fexceptions"
+                // -Wno-deprecated-declarations keeps the build log small.
+                // Abseil deprecates symbols that gRPC still uses, which makes
+                // the compiler write thousands of warnings. The Android Gradle
+                // plugin holds every native diagnostic in memory, so the
+                // Gradle daemon runs out of heap space.
+                cppFlags "-std=c++17 -frtti -fexceptions -Wno-deprecated-declarations"
                 arguments '-DANDROID_STL=c++_shared'
                 arguments '-DRUN_HAVE_POSIX_REGEX=0'
                 arguments '-DRUN_HAVE_STD_REGEX=0'
