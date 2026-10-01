@@ -4791,6 +4791,7 @@ grpc_cc_library(
         "//src/core:upb_utils",
         "//src/core:useful",
         "//src/core:xds_backend_metric_propagation",
+        "//src/core:xds_transport_interface",
         "@com_google_protobuf//upb/base",
         "@com_google_protobuf//upb/json",
         "@com_google_protobuf//upb/mem",

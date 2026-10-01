@@ -7569,6 +7569,21 @@ grpc_cc_library(
 )
 
 grpc_cc_library(
+    name = "xds_transport_interface",
+    hdrs = [
+        "xds/xds_client/xds_transport_interface.h",
+    ],
+    external_deps = [
+        "absl/status",
+        "absl/strings",
+    ],
+    deps = [
+        "dual_ref_counted",
+        "//:orphanable",
+    ],
+)
+
+grpc_cc_library(
     name = "xds_transport_grpc",
     srcs = [
         "xds/grpc/xds_transport_grpc.cc",
