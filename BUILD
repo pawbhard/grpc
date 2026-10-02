@@ -644,6 +644,7 @@ grpc_cc_library(
         "absl/status:statusor",
         "absl/strings",
         "absl/time:time",
+        "absl/types:span",
     ],
     public_hdrs = GRPC_PUBLIC_HDRS,
     tags = [
@@ -732,6 +733,7 @@ grpc_cc_library(
         "absl/status:statusor",
         "absl/strings",
         "absl/time:time",
+        "absl/types:span",
     ],
     public_hdrs = GRPC_PUBLIC_HDRS,
     select_deps = [

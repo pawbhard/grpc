@@ -7665,6 +7665,26 @@ grpc_cc_library(
 )
 
 grpc_cc_library(
+    name = "channel_factory_helpers",
+    srcs = [
+        "xds/grpc/channel_factory_helpers.cc",
+    ],
+    external_deps = [
+        "absl/status",
+        "absl/strings",
+        "absl/types:span",
+    ],
+    tags = ["nofixdeps"],
+    deps = [
+        "channel_handle",
+        "grpc_channel_transport",
+        "//:channel",
+        "//:grpc_public_hdrs",
+        "//:ref_counted_ptr",
+    ],
+)
+
+grpc_cc_library(
     name = "xds_transport_grpc",
     srcs = [
         "xds/grpc/xds_transport_grpc.cc",
@@ -7720,7 +7740,6 @@ grpc_cc_library(
         "//:grpc_trace",
         "//:iomgr",
         "//:iomgr_timer",
-        "//:orphanable",
         "//:ref_counted_ptr",
         "//:transport_auth_context",
         "//:xds_client",

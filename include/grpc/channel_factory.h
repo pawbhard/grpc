@@ -21,9 +21,12 @@
 #ifdef __cplusplus
 
 #include <memory>
+#include <string>
+#include <utility>
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
+#include "absl/types/span.h"
 
 namespace grpc_core {
 namespace experimental {
@@ -40,9 +43,10 @@ namespace experimental {
 /// gRPC supplies the implementation itself, following the same flow as the xDS
 /// transport factory.
 ///
-/// CreateChannel() is the only thing an implementation provides. A
-/// ChannelHandle cannot be constructed directly; to return one, call the
-/// gRPC-provided CreateChannelHandle() or CreateLameChannelHandle() below.
+/// CreateChannel() is the only method an implementation provides. A
+/// ChannelHandle cannot be constructed directly: an implementation returns one
+/// from CreateChannelHandle() or CreateLameChannelHandle() below, and gRPC's own
+/// implementations construct it internally.
 class ChannelFactory {
  public:
   /**
@@ -104,9 +108,16 @@ class ChannelFactory {
 /// not an interface and not virtual: gRPC supplies it, and an implementation of
 /// CreateChannel() only calls it to hand back a working channel.
 ///
-/// `creds` may be null for an insecure channel, and `args` may be null. Both are
-/// read only for the duration of this call; the returned handle keeps whatever
-/// it needs from them alive.
+/// `creds` must not be null: channel creation rejects null credentials, and
+/// treating null as insecure here would silently open a plaintext side channel.
+/// A caller that wants an insecure channel creates insecure credentials
+/// explicitly. `args` may be null. Both are read only for the duration of this
+/// call; the returned handle keeps whatever it needs from them alive.
+///
+/// `initial_metadata` is sent on every call the channel makes, so it is copied.
+/// The channel credentials carry any call credentials, including when they are
+/// a composite of transport and call credentials; there is no separate argument
+/// for them.
 ///
 /// A null handle is never returned. If the channel cannot be created, the
 /// returned handle stands for a lame channel and `*status` is set to a non-OK
@@ -115,7 +126,9 @@ class ChannelFactory {
 /// reports the reason through `*status` so that the caller can propagate it.
 std::unique_ptr<ChannelFactory::ChannelHandle> CreateChannelHandle(
     absl::string_view target, grpc_channel_credentials* creds,
-    const grpc_channel_args* args, absl::Status* status);
+    const grpc_channel_args* args,
+    absl::Span<const std::pair<std::string, std::string>> initial_metadata,
+    absl::Status* status);
 
 /**
  * EXPERIMENTAL API - Subject to change
