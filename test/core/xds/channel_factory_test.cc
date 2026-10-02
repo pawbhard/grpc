@@ -23,6 +23,7 @@
 #include <utility>
 #include <vector>
 
+#include "src/core/credentials/transport/transport_credentials.h"
 #include "src/core/lib/channel/channel_args.h"
 #include "src/core/lib/iomgr/exec_ctx.h"
 #include "src/core/util/json/json_args.h"
@@ -31,6 +32,7 @@
 #include "src/core/util/time.h"
 #include "src/core/util/validation_errors.h"
 #include "src/core/xds/grpc/certificate_provider_store.h"
+#include "src/core/xds/grpc/side_channel_cache.h"
 #include "src/core/xds/grpc/xds_channel_factory.h"
 #include "src/core/xds/grpc/xds_server_grpc.h"
 #include "src/core/xds/grpc/xds_transport_grpc.h"
@@ -197,6 +199,130 @@ TEST_F(ChannelFactoryTest, CreateChannelHandleWrapsAGrpcChannel) {
   auto transport = GetTransportFromHandle(handle.get(), &bridge_status);
   EXPECT_NE(transport.get(), nullptr);
   EXPECT_TRUE(bridge_status.ok()) << bridge_status.ToString();
+}
+
+// A stand-in for a caller's factory, used only to check that the channel
+// argument carries it through unchanged. Its CreateChannel is never called.
+class TestChannelFactory final : public experimental::ChannelFactory {
+ public:
+  std::unique_ptr<ChannelHandle> CreateChannel(absl::string_view /*key*/,
+                                               absl::Status* /*status*/) override {
+    return nullptr;
+  }
+};
+
+SideChannelKey MakeKey(
+    absl::string_view target, const RefCountedPtr<grpc_channel_credentials>& creds,
+    std::vector<std::pair<std::string, std::string>> initial_metadata = {}) {
+  SideChannelKey key;
+  key.target = std::string(target);
+  key.creds = creds;
+  key.initial_metadata = std::move(initial_metadata);
+  return key;
+}
+
+TEST_F(ChannelFactoryTest, SideChannelKeyTreatsEquivalentChannelsAsEqual) {
+  RefCountedPtr<grpc_channel_credentials> creds(
+      grpc_insecure_credentials_create());
+  SideChannelKey a = MakeKey(kTarget, creds);
+  SideChannelKey b = MakeKey(kTarget, creds);
+  EXPECT_FALSE(a < b);
+  EXPECT_FALSE(b < a);
+}
+
+TEST_F(ChannelFactoryTest, SideChannelKeyOrdersByTargetThenMetadata) {
+  RefCountedPtr<grpc_channel_credentials> creds(
+      grpc_insecure_credentials_create());
+  SideChannelKey a = MakeKey(kTarget, creds);
+  SideChannelKey different_target = MakeKey("localhost:2", creds);
+  EXPECT_TRUE(a < different_target);
+  EXPECT_FALSE(different_target < a);
+  SideChannelKey more_metadata = MakeKey(kTarget, creds, {{"k", "v"}});
+  EXPECT_TRUE(a < more_metadata);
+  EXPECT_FALSE(more_metadata < a);
+}
+
+TEST_F(ChannelFactoryTest, CreateChannelHandleSharesOneChannelPerKey) {
+  ExecCtx exec_ctx;
+  RefCountedPtr<grpc_channel_credentials> creds(
+      grpc_insecure_credentials_create());
+  absl::Status status1;
+  auto handle1 = experimental::CreateChannelHandle(
+      kTarget, creds.get(), /*args=*/nullptr, {{"k", "v"}}, &status1);
+  absl::Status status2;
+  auto handle2 = experimental::CreateChannelHandle(
+      kTarget, creds.get(), /*args=*/nullptr, {{"k", "v"}}, &status2);
+  ASSERT_NE(handle1.get(), nullptr);
+  ASSERT_NE(handle2.get(), nullptr);
+  absl::Status bridge_status;
+  auto transport1 = GetTransportFromHandle(handle1.get(), &bridge_status);
+  auto transport2 = GetTransportFromHandle(handle2.get(), &bridge_status);
+  ASSERT_NE(transport1.get(), nullptr);
+  // Both requests agree on everything that identifies the channel, so the
+  // second gets the cached transport rather than a second channel.
+  EXPECT_EQ(transport1.get(), transport2.get());
+}
+
+TEST_F(ChannelFactoryTest, CreateChannelHandleDistinguishesDifferentMetadata) {
+  ExecCtx exec_ctx;
+  RefCountedPtr<grpc_channel_credentials> creds(
+      grpc_insecure_credentials_create());
+  absl::Status status1;
+  auto handle1 = experimental::CreateChannelHandle(
+      kTarget, creds.get(), /*args=*/nullptr, {{"k", "v"}}, &status1);
+  absl::Status status2;
+  auto handle2 = experimental::CreateChannelHandle(
+      kTarget, creds.get(), /*args=*/nullptr, {{"k", "w"}}, &status2);
+  absl::Status bridge_status;
+  auto transport1 = GetTransportFromHandle(handle1.get(), &bridge_status);
+  auto transport2 = GetTransportFromHandle(handle2.get(), &bridge_status);
+  ASSERT_NE(transport1.get(), nullptr);
+  ASSERT_NE(transport2.get(), nullptr);
+  EXPECT_NE(transport1.get(), transport2.get());
+}
+
+TEST_F(ChannelFactoryTest, CacheDropsEntriesWithTheirTransport) {
+  ExecCtx exec_ctx;
+  RefCountedPtr<grpc_channel_credentials> creds(
+      grpc_insecure_credentials_create());
+  auto cache = MakeRefCounted<SideChannelCache>();
+  SideChannelKey key = MakeKey(kTarget, creds);
+  int creates = 0;
+  auto make_params = [&]() {
+    ++creates;
+    GrpcChannelTransport::Params params;
+    params.channel = RefCountedPtr<Channel>(Channel::FromC(
+        grpc_channel_create(key.target.c_str(), creds.get(), nullptr)));
+    return params;
+  };
+  {
+    auto transport1 = cache->GetOrCreate(key, make_params);
+    ASSERT_NE(transport1.get(), nullptr);
+    // The second request is answered from the cache without building anything.
+    auto transport2 = cache->GetOrCreate(key, make_params);
+    EXPECT_EQ(transport1.get(), transport2.get());
+    EXPECT_EQ(creates, 1);
+  }
+  // The last reference is gone, so the entry removed its own row, and the next
+  // request has to build a channel again. Counting constructions is used rather
+  // than comparing addresses, because a new object can land at the address the
+  // old one vacated.
+  auto transport3 = cache->GetOrCreate(key, make_params);
+  ASSERT_NE(transport3.get(), nullptr);
+  EXPECT_EQ(creates, 2);
+}
+
+TEST_F(ChannelFactoryTest, ChannelArgCarriesTheFactory) {
+  TestChannelFactory channel_factory;
+  grpc_arg arg = experimental::CreateChannelFactoryChannelArg(&channel_factory);
+  EXPECT_EQ(std::string(arg.key),
+            std::string(experimental::ChannelFactory::ChannelArgName()));
+  grpc_channel_args c_args;
+  c_args.num_args = 1;
+  c_args.args = &arg;
+  ChannelArgs args = ChannelArgs::FromC(&c_args);
+  // The argument borrows the factory, so what comes back is the same pointer.
+  EXPECT_EQ(args.GetObject<experimental::ChannelFactory>(), &channel_factory);
 }
 
 }  // namespace
