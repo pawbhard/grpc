@@ -7584,6 +7584,48 @@ grpc_cc_library(
 )
 
 grpc_cc_library(
+    name = "channel_handle",
+    srcs = [
+        "xds/xds_client/channel_handle.cc",
+    ],
+    hdrs = [
+        "xds/xds_client/channel_handle.h",
+    ],
+    external_deps = [
+        "absl/status",
+    ],
+    deps = [
+        "down_cast",
+        "xds_transport_interface",
+        "//:grpc_public_hdrs",
+        "//:ref_counted_ptr",
+    ],
+)
+
+grpc_cc_library(
+    name = "xds_channel_factory",
+    srcs = [
+        "xds/grpc/xds_channel_factory.cc",
+    ],
+    hdrs = [
+        "xds/grpc/xds_channel_factory.h",
+    ],
+    external_deps = [
+        "absl/status",
+        "absl/status:statusor",
+        "absl/strings",
+    ],
+    tags = ["nofixdeps"],
+    deps = [
+        "channel_handle",
+        "xds_server_grpc_interface",
+        "xds_transport_grpc",
+        "//:grpc_public_hdrs",
+        "//:ref_counted_ptr",
+    ],
+)
+
+grpc_cc_library(
     name = "xds_transport_grpc",
     srcs = [
         "xds/grpc/xds_transport_grpc.cc",
@@ -7596,6 +7638,7 @@ grpc_cc_library(
         "absl/container:flat_hash_map",
         "absl/container:inlined_vector",
         "absl/status",
+        "absl/status:statusor",
         "absl/strings",
     ],
     tags = ["nofixdeps"],

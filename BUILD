@@ -331,6 +331,7 @@ GRPC_PUBLIC_HDRS = [
     "include/grpc/private_key_signer.h",
     "include/grpc/byte_buffer.h",
     "include/grpc/byte_buffer_reader.h",
+    "include/grpc/channel_factory.h",
     "include/grpc/compression.h",
     "include/grpc/context_types.h",
     "include/grpc/create_channel_from_endpoint.h",

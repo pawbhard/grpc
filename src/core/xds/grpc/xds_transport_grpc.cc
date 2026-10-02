@@ -561,4 +561,40 @@ GrpcXdsTransportFactory::GetTransport(
   return transport;
 }
 
+absl::StatusOr<std::string> GrpcXdsTransportFactory::RegisterTarget(
+    std::shared_ptr<const GrpcXdsServerInterface> target) {
+  if (target == nullptr) {
+    return absl::InvalidArgumentError("xDS server target is null");
+  }
+  if (target->channel_creds_config() == nullptr) {
+    return absl::InvalidArgumentError(
+        absl::StrCat("xDS server target ", target->server_uri(),
+                     " has no channel credentials config"));
+  }
+  MutexLock lock(mu_);
+  for (const auto& registered : targets_) {
+    if (registered.second->Equals(*target)) return registered.first;
+  }
+  std::string key = absl::StrCat("xds/", next_target_key_++);
+  targets_.emplace(std::move(key), std::move(target));
+  return key;
+}
+
+RefCountedPtr<XdsTransportFactory::XdsTransport>
+GrpcXdsTransportFactory::GetTransportByKey(absl::string_view key,
+                                           absl::Status* status) {
+  std::shared_ptr<const GrpcXdsServerInterface> target;
+  {
+    MutexLock lock(mu_);
+    auto it = targets_.find(std::string(key));
+    if (it != targets_.end()) target = it->second;
+  }
+  if (target == nullptr) {
+    *status = absl::NotFoundError(
+        absl::StrCat("no xDS server target registered for key ", key));
+    return nullptr;
+  }
+  return GetTransport(*target, status);
+}
+
 }  // namespace grpc_core

@@ -22,6 +22,7 @@
 #include <grpc/status.h>
 #include <grpc/support/port_platform.h>
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
@@ -44,6 +45,8 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/container/inlined_vector.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 
 namespace grpc_core {
 
@@ -62,6 +65,23 @@ class GrpcXdsTransportFactory final : public XdsTransportFactory {
       const XdsBootstrap::XdsServerTarget& server,
       absl::Status* status) override;
 
+  // Associates `target` with a key and returns that key. An equal target
+  // registered again returns the existing key, so both callers share one
+  // channel. Callers that hold only a key use GetTransportByKey() to reach the
+  // transport.
+  //
+  // Fails if `target` is null or carries no channel credentials config, because
+  // channel creation turns missing channel credentials into an insecure channel
+  // rather than an error, so such a target must never reach it.
+  absl::StatusOr<std::string> RegisterTarget(
+      std::shared_ptr<const GrpcXdsServerInterface> target);
+
+  // Returns the transport registered under `key`. Returns null and sets
+  // `*status` to a non-OK status when no target is registered under that key;
+  // the public ChannelFactory adapter turns that into a lame handle.
+  RefCountedPtr<XdsTransport> GetTransportByKey(absl::string_view key,
+                                                absl::Status* status);
+
   grpc_pollset_set* interested_parties() const { return interested_parties_; }
 
  private:
@@ -76,6 +96,10 @@ class GrpcXdsTransportFactory final : public XdsTransportFactory {
       transports_ ABSL_GUARDED_BY(&mu_);
   absl::flat_hash_map<std::string /*Channel key*/, SharedChannel*> channels_
       ABSL_GUARDED_BY(&mu_);
+  absl::flat_hash_map<std::string /*Registered key*/,
+                      std::shared_ptr<const GrpcXdsServerInterface>>
+      targets_ ABSL_GUARDED_BY(&mu_);
+  uint64_t next_target_key_ ABSL_GUARDED_BY(&mu_) = 0;
 };
 
 class GrpcXdsTransportFactory::GrpcXdsTransport final
