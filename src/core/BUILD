@@ -7665,6 +7665,31 @@ grpc_cc_library(
 )
 
 grpc_cc_library(
+    name = "side_channel_cache",
+    srcs = [
+        "xds/grpc/side_channel_cache.cc",
+    ],
+    hdrs = [
+        "xds/grpc/side_channel_cache.h",
+    ],
+    external_deps = [
+        "absl/base:core_headers",
+        "absl/functional:function_ref",
+        "absl/status",
+    ],
+    tags = ["nofixdeps"],
+    deps = [
+        "channel_args",
+        "grpc_channel_transport",
+        "grpc_check",
+        "ref_counted",
+        "sync",
+        "//:grpc_security_base",
+        "//:ref_counted_ptr",
+    ],
+)
+
+grpc_cc_library(
     name = "channel_factory_helpers",
     srcs = [
         "xds/grpc/channel_factory_helpers.cc",
@@ -7676,10 +7701,13 @@ grpc_cc_library(
     ],
     tags = ["nofixdeps"],
     deps = [
+        "channel_args",
         "channel_handle",
         "grpc_channel_transport",
+        "side_channel_cache",
         "//:channel",
         "//:grpc_public_hdrs",
+        "//:grpc_security_base",
         "//:ref_counted_ptr",
     ],
 )

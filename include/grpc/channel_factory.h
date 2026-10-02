@@ -49,6 +49,12 @@ namespace experimental {
 /// implementations construct it internally.
 class ChannelFactory {
  public:
+  // Marks this type as one whose channel argument manages no ownership: the
+  // caller keeps the factory alive, and gRPC compares factories by pointer
+  // identity. The channel argument machinery reads this tag to generate the
+  // argument's vtable, so removing it would break that argument.
+  struct RawPointerChannelArgTag {};
+
   /**
    * EXPERIMENTAL API - Subject to change
    */
@@ -96,7 +102,20 @@ class ChannelFactory {
   /// This method is thread-safe and may be called concurrently.
   virtual std::unique_ptr<ChannelHandle> CreateChannel(
       absl::string_view key, absl::Status* status) = 0;
+
+  // The name of the channel argument that carries a ChannelFactory to gRPC.
+  static absl::string_view ChannelArgName();
 };
+
+/**
+ * EXPERIMENTAL API - Subject to change
+ */
+///
+/// Returns the channel argument that passes `factory` to gRPC.
+///
+/// The argument borrows `factory`: the caller keeps ownership of it and must
+/// keep it alive at least as long as any channel built with the argument.
+grpc_arg CreateChannelFactoryChannelArg(ChannelFactory* factory);
 
 /**
  * EXPERIMENTAL API - Subject to change
