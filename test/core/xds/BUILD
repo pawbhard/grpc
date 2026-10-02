@@ -371,6 +371,39 @@ grpc_cc_test(
     ],
 )
 
+grpc_cc_test(
+    name = "channel_factory_test",
+    srcs = ["channel_factory_test.cc"],
+    external_deps = [
+        "gtest",
+        "absl/status",
+        "absl/status:statusor",
+        "absl/strings",
+    ],
+    tags = ["xds_test"],
+    uses_event_engine = True,
+    uses_polling = True,
+    deps = [
+        "//:config",
+        "//:exec_ctx",
+        "//:gpr",
+        "//:grpc",
+        "//:grpc_base",
+        "//:grpc_core_credentials_header",
+        "//:ref_counted_ptr",
+        "//:xds_client",
+        "//src/core:channel_factory_helpers",
+        "//src/core:channel_handle",
+        "//src/core:json_reader",
+        "//src/core:validation_errors",
+        "//src/core:xds_certificate_provider_store",
+        "//src/core:xds_channel_factory",
+        "//src/core:xds_server_grpc",
+        "//src/core:xds_transport_grpc",
+        "//test/core/test_util:grpc_test_util",
+    ],
+)
+
 grpc_internal_proto_library(
     name = "xds_client_fuzzer_proto",
     srcs = [
