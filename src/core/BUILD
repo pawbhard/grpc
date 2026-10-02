@@ -7618,10 +7618,10 @@ grpc_cc_library(
     tags = ["nofixdeps"],
     deps = [
         "channel_handle",
-        "xds_server_grpc_interface",
         "xds_transport_grpc",
         "//:grpc_public_hdrs",
         "//:ref_counted_ptr",
+        "//:xds_client",
     ],
 )
 

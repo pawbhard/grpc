@@ -17,10 +17,15 @@
 #ifndef GRPC_SRC_CORE_XDS_XDS_CLIENT_XDS_TRANSPORT_H
 #define GRPC_SRC_CORE_XDS_XDS_CLIENT_XDS_TRANSPORT_H
 
+#include <memory>
+#include <string>
+
 #include "src/core/util/dual_ref_counted.h"
 #include "src/core/xds/xds_client/xds_bootstrap.h"
 #include "src/core/xds/xds_client/xds_transport_interface.h"
 #include "absl/status/status.h"
+#include "absl/status/statusor.h"
+#include "absl/strings/string_view.h"
 
 namespace grpc_core {
 
@@ -41,6 +46,30 @@ class XdsTransportFactory : public DualRefCounted<XdsTransportFactory> {
   // although the returned channel must still accept calls (which may fail).
   virtual RefCountedPtr<XdsTransport> GetTransport(
       const XdsBootstrap::XdsServerTarget& server, absl::Status* status) = 0;
+
+  // Associates `target` with an opaque key and returns that key, so that a
+  // caller holding only the key can reach the transport later. An equal target
+  // registered again returns the existing key, so both callers share one
+  // channel.
+  //
+  // Not every factory can hold that association: one built without a bootstrap
+  // has nowhere to keep it. The default reports that it is unsupported, which
+  // lets callers that never need a key ignore this entirely.
+  virtual absl::StatusOr<std::string> RegisterTarget(
+      std::shared_ptr<const XdsBootstrap::XdsServerTarget> target) {
+    return absl::UnimplementedError(
+        "this xDS transport factory cannot register targets");
+  }
+
+  // Returns the transport registered under `key`, which must be a key produced
+  // by RegisterTarget(). Returns null and sets `*status` when no target is
+  // registered under that key.
+  virtual RefCountedPtr<XdsTransport> GetTransportByKey(absl::string_view key,
+                                                        absl::Status* status) {
+    *status = absl::UnimplementedError(
+        "this xDS transport factory cannot look up transports by key");
+    return nullptr;
+  }
 };
 
 }  // namespace grpc_core

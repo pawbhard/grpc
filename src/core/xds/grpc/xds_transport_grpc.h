@@ -62,13 +62,13 @@ class GrpcXdsTransportFactory final : public XdsTransportFactory {
   // channel creation turns missing channel credentials into an insecure channel
   // rather than an error, so such a target must never reach it.
   absl::StatusOr<std::string> RegisterTarget(
-      std::shared_ptr<const GrpcXdsServerInterface> target);
+      std::shared_ptr<const XdsBootstrap::XdsServerTarget> target) override;
 
   // Returns the transport registered under `key`. Returns null and sets
   // `*status` to a non-OK status when no target is registered under that key;
   // the public ChannelFactory adapter turns that into a lame handle.
   RefCountedPtr<XdsTransport> GetTransportByKey(absl::string_view key,
-                                                absl::Status* status);
+                                                absl::Status* status) override;
 
   grpc_pollset_set* interested_parties() const { return interested_parties_; }
 
@@ -85,7 +85,7 @@ class GrpcXdsTransportFactory final : public XdsTransportFactory {
   absl::flat_hash_map<std::string /*Channel key*/, SharedChannel*> channels_
       ABSL_GUARDED_BY(&mu_);
   absl::flat_hash_map<std::string /*Registered key*/,
-                      std::shared_ptr<const GrpcXdsServerInterface>>
+                      std::shared_ptr<const XdsBootstrap::XdsServerTarget>>
       targets_ ABSL_GUARDED_BY(&mu_);
   uint64_t next_target_key_ ABSL_GUARDED_BY(&mu_) = 0;
 };

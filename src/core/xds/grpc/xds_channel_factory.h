@@ -27,8 +27,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "src/core/util/ref_counted_ptr.h"
-#include "src/core/xds/grpc/xds_server_grpc_interface.h"
-#include "src/core/xds/grpc/xds_transport_grpc.h"
+#include "src/core/xds/xds_client/xds_transport.h"
 
 namespace grpc_core {
 
@@ -42,21 +41,21 @@ namespace grpc_core {
 class XdsChannelFactory final : public experimental::ChannelFactory {
  public:
   explicit XdsChannelFactory(
-      RefCountedPtr<GrpcXdsTransportFactory> transport_factory);
+      RefCountedPtr<XdsTransportFactory> transport_factory);
 
   // Registers `target` and returns the key that resolves to it.
   //
-  // See GrpcXdsTransportFactory::RegisterTarget() for the dedup and validation
+  // See XdsTransportFactory::RegisterTarget() for the dedup and validation
   // rules. This only forwards, so that callers of the public API never need the
   // concrete transport factory type.
   absl::StatusOr<std::string> RegisterTarget(
-      std::shared_ptr<const GrpcXdsServerInterface> target);
+      std::shared_ptr<const XdsBootstrap::XdsServerTarget> target);
 
   std::unique_ptr<ChannelHandle> CreateChannel(
       absl::string_view key, absl::Status* status) override;
 
  private:
-  RefCountedPtr<GrpcXdsTransportFactory> transport_factory_;
+  RefCountedPtr<XdsTransportFactory> transport_factory_;
 };
 
 }  // namespace grpc_core

@@ -312,6 +312,20 @@ TEST_F(ChannelFactoryTest, CacheDropsEntriesWithTheirTransport) {
   EXPECT_EQ(creates, 2);
 }
 
+TEST_F(ChannelFactoryTest, RegistryIsReachableThroughTheAbstractFactory) {
+  ExecCtx exec_ctx;
+  // The filter configuration plumbing carries the abstract type only, so the
+  // registry has to be reachable through it.
+  XdsTransportFactory& abstract_factory = *transport_factory_;
+  absl::StatusOr<std::string> key =
+      abstract_factory.RegisterTarget(MakeTarget());
+  ASSERT_TRUE(key.ok()) << key.status().ToString();
+  absl::Status status;
+  auto transport = abstract_factory.GetTransportByKey(*key, &status);
+  ASSERT_NE(transport.get(), nullptr);
+  EXPECT_TRUE(status.ok()) << status.ToString();
+}
+
 TEST_F(ChannelFactoryTest, ChannelArgCarriesTheFactory) {
   TestChannelFactory channel_factory;
   grpc_arg arg = experimental::CreateChannelFactoryChannelArg(&channel_factory);

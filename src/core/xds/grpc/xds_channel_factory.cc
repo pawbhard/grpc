@@ -28,11 +28,11 @@
 namespace grpc_core {
 
 XdsChannelFactory::XdsChannelFactory(
-    RefCountedPtr<GrpcXdsTransportFactory> transport_factory)
+    RefCountedPtr<XdsTransportFactory> transport_factory)
     : transport_factory_(std::move(transport_factory)) {}
 
 absl::StatusOr<std::string> XdsChannelFactory::RegisterTarget(
-    std::shared_ptr<const GrpcXdsServerInterface> target) {
+    std::shared_ptr<const XdsBootstrap::XdsServerTarget> target) {
   return transport_factory_->RegisterTarget(std::move(target));
 }
 

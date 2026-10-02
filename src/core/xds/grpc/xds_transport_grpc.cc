@@ -260,13 +260,16 @@ GrpcXdsTransportFactory::GetTransport(
 }
 
 absl::StatusOr<std::string> GrpcXdsTransportFactory::RegisterTarget(
-    std::shared_ptr<const GrpcXdsServerInterface> target) {
+    std::shared_ptr<const XdsBootstrap::XdsServerTarget> target) {
   if (target == nullptr) {
     return absl::InvalidArgumentError("xDS server target is null");
   }
-  if (target->channel_creds_config() == nullptr) {
+  // The credentials check needs the gRPC-specific part of the target, the same
+  // downcast GetTransport() performs.
+  const auto& grpc_target = DownCast<const GrpcXdsServerInterface&>(*target);
+  if (grpc_target.channel_creds_config() == nullptr) {
     return absl::InvalidArgumentError(
-        absl::StrCat("xDS server target ", target->server_uri(),
+        absl::StrCat("xDS server target ", grpc_target.server_uri(),
                      " has no channel credentials config"));
   }
   MutexLock lock(mu_);
@@ -283,7 +286,7 @@ absl::StatusOr<std::string> GrpcXdsTransportFactory::RegisterTarget(
 RefCountedPtr<XdsTransportFactory::XdsTransport>
 GrpcXdsTransportFactory::GetTransportByKey(absl::string_view key,
                                            absl::Status* status) {
-  std::shared_ptr<const GrpcXdsServerInterface> target;
+  std::shared_ptr<const XdsBootstrap::XdsServerTarget> target;
   {
     MutexLock lock(mu_);
     auto it = targets_.find(std::string(key));
