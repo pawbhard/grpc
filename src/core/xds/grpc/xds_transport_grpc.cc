@@ -274,7 +274,9 @@ absl::StatusOr<std::string> GrpcXdsTransportFactory::RegisterTarget(
     if (registered.second->Equals(*target)) return registered.first;
   }
   std::string key = absl::StrCat("xds/", next_target_key_++);
-  targets_.emplace(std::move(key), std::move(target));
+  // `key` is copied rather than moved, because it is returned below: moving it
+  // into the map would leave the caller with an empty key.
+  targets_.emplace(key, std::move(target));
   return key;
 }
 
