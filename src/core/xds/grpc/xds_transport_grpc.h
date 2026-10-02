@@ -17,33 +17,21 @@
 #ifndef GRPC_SRC_CORE_XDS_GRPC_XDS_TRANSPORT_GRPC_H
 #define GRPC_SRC_CORE_XDS_GRPC_XDS_TRANSPORT_GRPC_H
 
-#include <grpc/grpc.h>
-#include <grpc/slice.h>
-#include <grpc/status.h>
 #include <grpc/support/port_platform.h>
 
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <string>
-#include <utility>
-#include <vector>
 
 #include "src/core/lib/channel/channel_args.h"
-#include "src/core/lib/iomgr/closure.h"
-#include "src/core/lib/iomgr/error.h"
 #include "src/core/lib/iomgr/iomgr_fwd.h"
-#include "src/core/lib/surface/channel.h"
-#include "src/core/util/orphanable.h"
 #include "src/core/util/ref_counted_ptr.h"
 #include "src/core/util/sync.h"
-#include "src/core/util/time.h"
 #include "src/core/xds/grpc/certificate_provider_store_interface.h"
+#include "src/core/xds/grpc/grpc_channel_transport.h"
 #include "src/core/xds/grpc/xds_server_grpc_interface.h"
-#include "src/core/xds/xds_client/xds_bootstrap.h"
 #include "src/core/xds/xds_client/xds_transport.h"
 #include "absl/container/flat_hash_map.h"
-#include "absl/container/inlined_vector.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
@@ -102,11 +90,12 @@ class GrpcXdsTransportFactory final : public XdsTransportFactory {
   uint64_t next_target_key_ ABSL_GUARDED_BY(&mu_) = 0;
 };
 
+// The xDS transport: a GrpcChannelTransport plus membership in the factory's
+// transport cache. Everything about streaming, connectivity watching and
+// backoff lives in the base class.
 class GrpcXdsTransportFactory::GrpcXdsTransport final
-    : public XdsTransportFactory::XdsTransport {
+    : public GrpcChannelTransport {
  public:
-  class GrpcStreamingCall;
-
   GrpcXdsTransport(WeakRefCountedPtr<GrpcXdsTransportFactory> factory,
                    RefCountedPtr<SharedChannel> channel,
                    const GrpcXdsServerInterface& server, absl::Status* status);
@@ -114,105 +103,12 @@ class GrpcXdsTransportFactory::GrpcXdsTransport final
 
   void Orphaned() override;
 
-  void StartConnectivityFailureWatch(
-      RefCountedPtr<ConnectivityFailureWatcher> watcher) override;
-  void StopConnectivityFailureWatch(
-      const RefCountedPtr<ConnectivityFailureWatcher>& watcher) override;
-
-  OrphanablePtr<StreamingCall> CreateStreamingCall(
-      const char* method,
-      std::unique_ptr<StreamingCall::EventHandler> event_handler,
-      CallOptions options) override;
-
-  void ResetBackoff() override;
-
-  Channel* channel() const;
-
  private:
-  class StateWatcher;
-
   WeakRefCountedPtr<GrpcXdsTransportFactory> factory_;
   std::string key_;
-  RefCountedPtr<SharedChannel> channel_;
-  RefCountedPtr<grpc_call_credentials> call_creds_;
-  std::vector<std::pair<std::string, std::string>> initial_metadata_;
-  Duration timeout_;
-
-  Mutex mu_;
-  absl::flat_hash_map<RefCountedPtr<ConnectivityFailureWatcher>, StateWatcher*>
-      watchers_ ABSL_GUARDED_BY(&mu_);
-};
-
-class GrpcXdsTransportFactory::GrpcXdsTransport::GrpcStreamingCall final
-    : public XdsTransportFactory::XdsTransport::StreamingCall {
- public:
-  GrpcStreamingCall(
-      WeakRefCountedPtr<GrpcXdsTransportFactory> factory, Channel* channel,
-      const char* method,
-      std::unique_ptr<StreamingCall::EventHandler> event_handler,
-      grpc_call_credentials* call_creds,
-      const std::vector<std::pair<std::string, std::string>>& initial_metadata,
-      Duration timeout, CallOptions options);
-  ~GrpcStreamingCall() override;
-
-  void Orphan() override;
-
-  void SendMessage(std::string payload, bool send_half_close) override;
-
-  void StartRecvMessage() override;
-
-  void SendHalfClose() override;
-
- private:
-  using OpList = absl::InlinedVector<grpc_op, 3>;
-
-  void AddSendInitialMetadataOp(OpList& op_list);
-  void AddRecvInitialMetadataOp(OpList& op_list);
-  void AddRecvTrailingMetadataOp(OpList& op_list);
-  void AddSendCloseFromClientOp(OpList& op_list);
-  void AddSendMessageOp(std::string payload, OpList& op_list);
-  void StartBatch(const OpList& op_list, const char* ref_reason,
-                  grpc_closure* closure);
-
-  static void OnRecvInitialMetadata(void* arg, grpc_error_handle /*error*/);
-  static void OnRequestSent(void* arg, grpc_error_handle error);
-  static void OnHalfClosed(void* arg, grpc_error_handle error);
-  static void OnResponseReceived(void* arg, grpc_error_handle /*error*/);
-  static void OnStatusReceived(void* arg, grpc_error_handle /*error*/);
-
-  WeakRefCountedPtr<GrpcXdsTransportFactory> factory_;
-
-  std::unique_ptr<StreamingCall::EventHandler> event_handler_;
-
-  // Always non-NULL.
-  grpc_call* call_;
-
-  // recv_initial_metadata
-  grpc_metadata_array initial_metadata_recv_;
-  grpc_closure on_recv_initial_metadata_;
-
-  // send_initial_metadata
-  std::vector<grpc_metadata> send_initial_metadata_;
-  bool sent_initial_metadata_ = false;
-
-  // send_message
-  grpc_byte_buffer* send_message_payload_ = nullptr;
-  grpc_closure on_request_sent_;
-
-  // half_close
-  grpc_closure on_half_closed_;
-
-  // recv_message
-  grpc_byte_buffer* recv_message_payload_ = nullptr;
-  grpc_closure on_response_received_;
-
-  // recv_trailing_metadata
-  grpc_metadata_array trailing_metadata_recv_;
-  grpc_status_code status_code_;
-  grpc_slice status_details_ = grpc_empty_slice();
-  grpc_closure on_status_received_;
-
-  const CallOptions options_;
+  // Named apart from the base class's channel_ to keep it obvious which one is
+  // the Channel and which is the cache entry that owns it.
+  RefCountedPtr<SharedChannel> shared_channel_;
 };
 
 }  // namespace grpc_core
