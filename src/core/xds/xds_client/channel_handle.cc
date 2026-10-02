@@ -21,7 +21,7 @@
 
 namespace grpc_core {
 
-RefCountedPtr<XdsTransportInterface> GetXdsTransport(
+RefCountedPtr<XdsTransportInterface> GetTransportFromHandle(
     experimental::ChannelFactory::ChannelHandle* handle, absl::Status* status) {
   if (handle == nullptr) {
     *status = absl::InvalidArgumentError("channel handle is null");

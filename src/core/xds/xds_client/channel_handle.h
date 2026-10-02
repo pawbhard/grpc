@@ -64,7 +64,7 @@ class ChannelHandleImpl final
 // that describes why. `handle` must have come from a gRPC-provided factory; the
 // public ChannelFactory header documents that a handle cannot be constructed
 // directly.
-RefCountedPtr<XdsTransportInterface> GetXdsTransport(
+RefCountedPtr<XdsTransportInterface> GetTransportFromHandle(
     experimental::ChannelFactory::ChannelHandle* handle, absl::Status* status);
 
 }  // namespace grpc_core

@@ -47,6 +47,12 @@ namespace grpc_core {
 // cache. A non-xDS side channel can use it directly, for a channel built from a
 // caller-supplied target, credentials and metadata. It caches nothing itself,
 // so orphaning has nothing to undo.
+//
+// It implements XdsTransportInterface, which despite its name and its home in
+// the xDS client tree is a plain bidi-streaming transport abstraction: nothing
+// in it mentions xDS. The naming and the siting predate the non-xDS use of it,
+// and were left alone while the xDS path was the only consumer; they should be
+// settled together with that use, once its shape is known.
 class GrpcChannelTransport : public XdsTransportInterface {
  public:
   class GrpcStreamingCall;
