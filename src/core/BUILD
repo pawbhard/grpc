@@ -7626,6 +7626,45 @@ grpc_cc_library(
 )
 
 grpc_cc_library(
+    name = "grpc_channel_transport",
+    srcs = [
+        "xds/grpc/grpc_channel_transport.cc",
+    ],
+    hdrs = [
+        "xds/grpc/grpc_channel_transport.h",
+    ],
+    external_deps = [
+        "absl/base:core_headers",
+        "absl/container:flat_hash_map",
+        "absl/container:inlined_vector",
+        "absl/status",
+        "absl/strings",
+    ],
+    tags = ["nofixdeps"],
+    visibility = ["//bazel:xds_client_core"],
+    deps = [
+        "closure",
+        "connectivity_state",
+        "error",
+        "grpc_check",
+        "iomgr_fwd",
+        "pollset_set",
+        "slice",
+        "slice_refcount",
+        "sync",
+        "time",
+        "xds_transport_interface",
+        "//:channel",
+        "//:debug_location",
+        "//:grpc_base",
+        "//:grpc_public_hdrs",
+        "//:grpc_security_base",
+        "//:orphanable",
+        "//:ref_counted_ptr",
+    ],
+)
+
+grpc_cc_library(
     name = "xds_transport_grpc",
     srcs = [
         "xds/grpc/xds_transport_grpc.cc",
@@ -7653,6 +7692,7 @@ grpc_cc_library(
         "default_event_engine",
         "down_cast",
         "error",
+        "grpc_channel_transport",
         "grpc_check",
         "init_internally",
         "iomgr_fwd",
