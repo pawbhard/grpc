@@ -1,6 +1,6 @@
 # gRPC C++ Agents Collaboration Guide
 
- This document outlines conventions and best practices for AI-assisted development in the gRPC C++ codebase.
+Hello Agents, This document outlines conventions and best practices for AI-assisted development in the gRPC C++ codebase.
 
 ## Preferred Tools & Libraries
 
