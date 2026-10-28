@@ -248,11 +248,20 @@ class AutoshardingLbPolicy final : public LoadBalancingPolicy {
   //   don't revert to an older generation after restarting the stream.
   // - Reading assignment chunks from the autosharding server and compiling
   //   them into a complete assignment, including all necessary validation.
-  // - Handling the initial assignment timer, while the policy continues
-  //   using the previous assignment until a new assignment is received or
-  //   the timer fires.
+  //   This will use AutoshardingAssignmentBuilder, which must be recreated
+  //   for each new client so that the accepted generation starts at zero
+  //   (see the builder's comment).
+  // - Sending the client UUID and the last accepted generation in the
+  //   initial request.  The UUID is created by the policy at build time, not
+  //   by the client, and it is reused across client instances and stream
+  //   restarts (gRFC A119).
+  // - Handling the initial assignment timer.  The timer is per client
+  //   instance, because the policy keeps using the previous client's
+  //   assignment until the new client reports its first result.
   // The client reports results to this policy via
-  // OnAssignmentReceivedLocked().
+  // OnAssignmentReceivedLocked().  The policy must ignore callbacks from
+  // superseded client instances, and it keeps using the previous assignment
+  // until the new client reports its first result.
   void CreateAutoshardingClientLocked();
 
   // Called by the autosharding client to report a new assignment, or a
@@ -352,6 +361,15 @@ AutoshardingLbPolicy::PickResult AutoshardingLbPolicy::Picker::Pick(
   }
   // Look up the slice covering the key.
   const SliceMap::Entry& slice = slice_map_->Lookup(*key);
+  // Per gRFC A119, a slice for which the server explicitly assigned no
+  // endpoints fails picks, even when fallback is enabled.
+  // TODO(bpawan): Add a policy-level test for this once the autosharding
+  // client can report assignments.  The builder tests only cover the flag
+  // itself.
+  if (slice.fallback_disabled && slice.endpoints.empty()) {
+    return PickResult::Fail(absl::UnavailableError(
+        "no endpoints assigned to this slice and fallback is disabled"));
+  }
   if (!slice.fallback_disabled && IsPoolInFallback(slice.endpoints) &&
       config_->enable_fallback()) {
     FallbackEndpointIndexIterator iterator(endpoints_.size());
@@ -617,6 +635,11 @@ absl::Status AutoshardingLbPolicy::UpdateLocked(UpdateArgs args) {
   const bool channel_factory_key_changed =
       config_ == nullptr ||
       new_config->channel_factory_key() != config_->channel_factory_key();
+  // TODO(bpawan): Compare the effective autosharding target, i.e. the
+  // configured target after replacing the "%s" token with the Locality
+  // resolver attribute (gRFC A119).  The resolved locality can change in a
+  // resolver update without a config change, which must also create a new
+  // autosharding client (and reset the generation).
   const bool autosharding_target_changed =
       config_ == nullptr ||
       new_config->autosharding_target() != config_->autosharding_target();

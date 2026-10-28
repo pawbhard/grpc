@@ -24,7 +24,9 @@
 #include <string>
 #include <vector>
 
-#include "proto/autosharding/v1/autosharding.upb.h"
+// Forward declaration, so that this header does not depend on the wire
+// format.  Only the builder needs the proto.
+struct google_cloud_autosharding_v1_AssignmentChunk;
 
 namespace grpc_core {
 
@@ -55,6 +57,17 @@ struct AutoshardingAssignment {
 // then builds and validates the assignment when the AssignmentMetadata
 // message arrives (gRFC A119).
 //
+// A builder instance is scoped to one AutoshardingClient instance: it must be
+// reused across stream restarts (so that the accepted generation is
+// preserved), but it must be replaced when the client is recreated because the
+// channel factory key or the autosharding target changes.  gRFC A119 requires
+// the generation to be reset in the latter case, because the new client may be
+// talking to a different sharding service or a different target.
+//
+// Must be accessed only from the LB policy's WorkSerializer (or the
+// autosharding client's serializer), because the stream callbacks that feed it
+// are not otherwise synchronized with the LB policy.
+//
 // Not thread-safe.
 class AutoshardingAssignmentBuilder final {
  public:
@@ -73,8 +86,9 @@ class AutoshardingAssignmentBuilder final {
   struct Result {
     Outcome outcome;
     // Value for AssignmentAck.error_message.  Empty if there was no issue.
-    // The message holds only counts, so it is always shorter than the
-    // 512-character limit of that field.
+    // The message contains only counts and the generation, so it is short in
+    // practice; the caller must still truncate it to the 512-character limit
+    // of that field.
     std::string error_message;
     // Set only if outcome is kAccepted.
     std::optional<AutoshardingAssignment> assignment;
@@ -85,13 +99,21 @@ class AutoshardingAssignmentBuilder final {
   void AddChunk(const google_cloud_autosharding_v1_AssignmentChunk* chunk);
 
   // Builds the assignment from the chunks added since the last call to
-  // Build() or Reset(), and then clears those chunks.
+  // Build() or ResetChunks(), and then clears those chunks.
   // generation is the value from the AssignmentMetadata message.
   Result Build(int64_t generation);
 
-  // Discards all chunks added since the last call to Build().  Call this
-  // when the stream restarts in the middle of an assignment.
-  void Reset();
+  // Discards the chunks added since the last call to Build(), e.g., because
+  // the stream restarted in the middle of an assignment.  Intentionally does
+  // not reset the accepted generation, which must survive stream restarts.
+  void ResetChunks();
+
+  // The generation of the most recently accepted assignment, or 0 if no
+  // assignment has been accepted yet.  This is the value for
+  // InitialClientConfig.latest_generation.  Zero also means that the client
+  // has not reported a valid assignment to the LB policy yet, so errors must
+  // still be reported.
+  int64_t last_accepted_generation() const { return last_accepted_generation_; }
 
  private:
   struct PendingSlice {

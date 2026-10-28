@@ -336,6 +336,7 @@ TEST_F(AutoshardingAssignmentBuilderTest, AllSlicesInvalidIsRejected) {
 TEST_F(AutoshardingAssignmentBuilderTest, StaleGeneration) {
   AddChunk({{"", std::nullopt, {0}}}, {"host0"});
   EXPECT_EQ(builder_.Build(5).outcome, Outcome::kAccepted);
+  EXPECT_EQ(builder_.last_accepted_generation(), 5);
   AddChunk({{"", std::nullopt, {0}}}, {"host0"});
   Result result = builder_.Build(5);
   EXPECT_EQ(result.outcome, Outcome::kStale);
@@ -343,12 +344,14 @@ TEST_F(AutoshardingAssignmentBuilderTest, StaleGeneration) {
             "received generation 5 is not greater than the latest generation "
             "5");
   EXPECT_FALSE(result.assignment.has_value());
+  EXPECT_EQ(builder_.last_accepted_generation(), 5);
 }
 
 TEST_F(AutoshardingAssignmentBuilderTest, ZeroGenerationIsStale) {
   AddChunk({{"", std::nullopt, {0}}}, {"host0"});
   Result result = builder_.Build(0);
   EXPECT_EQ(result.outcome, Outcome::kStale);
+  EXPECT_EQ(builder_.last_accepted_generation(), 0);
 }
 
 TEST_F(AutoshardingAssignmentBuilderTest, BuildClearsChunks) {
@@ -376,12 +379,15 @@ TEST_F(AutoshardingAssignmentBuilderTest, StaleBuildClearsChunks) {
   EXPECT_THAT(result.assignment->endpoint_names, ElementsAre("host1"));
 }
 
-TEST_F(AutoshardingAssignmentBuilderTest, ResetDiscardsChunks) {
+TEST_F(AutoshardingAssignmentBuilderTest,
+       ResetChunksDiscardsPartialAssignment) {
   AddChunk({{"", std::nullopt, {0}}}, {"host0"});
   EXPECT_EQ(builder_.Build(1).outcome, Outcome::kAccepted);
+  EXPECT_EQ(builder_.last_accepted_generation(), 1);
   AddChunk({{"b", "a", {0}}}, {"host0"});
-  builder_.Reset();
-  // Reset() preserves the last accepted generation.
+  builder_.ResetChunks();
+  // ResetChunks() preserves the last accepted generation.
+  EXPECT_EQ(builder_.last_accepted_generation(), 1);
   AddChunk({{"", std::nullopt, {0}}}, {"host1"});
   EXPECT_EQ(builder_.Build(1).outcome, Outcome::kStale);
   AddChunk({{"", std::nullopt, {0}}}, {"host1"});

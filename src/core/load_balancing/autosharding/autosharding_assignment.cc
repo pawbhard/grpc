@@ -22,6 +22,7 @@
 #include <utility>
 #include <vector>
 
+#include "proto/autosharding/v1/autosharding.upb.h"
 #include "src/core/util/upb_utils.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
@@ -106,7 +107,7 @@ void AutoshardingAssignmentBuilder::AddChunk(
   }
 }
 
-void AutoshardingAssignmentBuilder::Reset() {
+void AutoshardingAssignmentBuilder::ResetChunks() {
   num_chunks_ = 0;
   num_slice_assignments_ = 0;
   slices_.clear();
@@ -154,7 +155,7 @@ AutoshardingAssignmentBuilder::Result AutoshardingAssignmentBuilder::Build(
   std::vector<PendingSlice> slices = std::move(slices_);
   std::vector<std::string> endpoint_names = std::move(endpoint_names_);
   IssueCounts counts = issue_counts_;
-  Reset();
+  ResetChunks();
   // Check the generation.
   if (generation <= last_accepted_generation_) {
     return {Outcome::kStale,
@@ -184,10 +185,14 @@ AutoshardingAssignmentBuilder::Result AutoshardingAssignmentBuilder::Build(
   size_t num_gaps = 0;
   PendingSlice* candidate = nullptr;
   auto append_candidate = [&]() {
-    absl::string_view prev_end_key = assignment.slices.empty()
-                                         ? absl::string_view()
-                                         : assignment.slices.back().end_key;
-    if (candidate->start_key > prev_end_key) {
+    // The first slice implicitly starts at -infinity.  Compare before moving
+    // start_key, and do not hold on to a view of the last end key across the
+    // push_back() below, since that can reallocate the vector.
+    const bool needs_gap =
+        assignment.slices.empty()
+            ? !candidate->start_key.empty()
+            : candidate->start_key > assignment.slices.back().end_key;
+    if (needs_gap) {
       assignment.slices.push_back({std::move(candidate->start_key), {}, false});
       ++num_gaps;
     }
@@ -197,9 +202,8 @@ AutoshardingAssignmentBuilder::Result AutoshardingAssignmentBuilder::Build(
         {std::move(candidate->end_key).value_or(std::string()),
          std::move(candidate->endpoints), fallback_disabled});
   };
-  // Largest end_key seen so far; not set for +infinity.  Points into
-  // slices, which is not modified while the view is in use.
-  std::optional<absl::string_view> max_end_key = absl::string_view();
+  // Largest end_key seen so far; not set for +infinity.
+  std::optional<std::string> max_end_key = std::string();
   for (PendingSlice& slice : slices) {
     bool has_invalid_endpoint = false;
     for (size_t index : slice.endpoints) {
