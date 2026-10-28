@@ -16,25 +16,31 @@
 
 #include "src/core/load_balancing/autosharding/autosharding.h"
 
+#include <grpc/channel_factory.h>
 #include <grpc/impl/channel_arg_names.h>
 #include <grpc/impl/connectivity_state.h>
 #include <grpc/support/port_platform.h>
 #include <inttypes.h>
 
 #include <algorithm>
+#include <cstdint>
+#include <cstring>
 #include <map>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include "src/core/client_channel/channel_factory.h"
 #include "src/core/config/core_configuration.h"
 #include "src/core/lib/address_utils/sockaddr_utils.h"
 #include "src/core/lib/channel/channel_args.h"
 #include "src/core/lib/debug/trace.h"
 #include "src/core/lib/iomgr/pollset_set.h"
+#include "src/core/lib/surface/validate_metadata.h"
 #include "src/core/lib/transport/connectivity_state.h"
 #include "src/core/load_balancing/autosharding/autosharding_assignment.h"
+#include "src/core/load_balancing/autosharding/autosharding_client.h"
 #include "src/core/load_balancing/delegating_helper.h"
 #include "src/core/load_balancing/lb_policy.h"
 #include "src/core/load_balancing/lb_policy_factory.h"
@@ -43,6 +49,7 @@
 #include "src/core/resolver/endpoint_addresses.h"
 #include "src/core/util/crash.h"
 #include "src/core/util/debug_location.h"
+#include "src/core/util/down_cast.h"
 #include "src/core/util/grpc_check.h"
 #include "src/core/util/json/json.h"
 #include "src/core/util/json/json_args.h"
@@ -52,6 +59,7 @@
 #include "src/core/util/ref_counted_ptr.h"
 #include "src/core/util/shared_bit_gen.h"
 #include "src/core/util/validation_errors.h"
+#include "src/core/xds/xds_client/xds_transport.h"
 #include "absl/log/log.h"
 #include "absl/random/random.h"
 #include "absl/status/status.h"
@@ -66,6 +74,39 @@ namespace grpc_core {
 namespace {
 
 constexpr absl::string_view kAutoSharding = "autosharding_experimental";
+
+// Generates a version 4 UUID, used as the client UUID in the initial request
+// to the sharding service (gRFC A119).
+std::string GenerateUuid() {
+  uint8_t bytes[16];
+  for (size_t i = 0; i < sizeof(bytes); i += sizeof(uint64_t)) {
+    uint64_t value = absl::Uniform<uint64_t>(SharedBitGen());
+    std::memcpy(bytes + i, &value, sizeof(value));
+  }
+  // Set the version (4) and variant (RFC 4122) bits.
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  constexpr char kHexDigits[] = "0123456789abcdef";
+  std::string uuid;
+  uuid.reserve(36);
+  for (size_t i = 0; i < sizeof(bytes); ++i) {
+    if (i == 4 || i == 6 || i == 8 || i == 10) uuid.push_back('-');
+    uuid.push_back(kHexDigits[bytes[i] >> 4]);
+    uuid.push_back(kHexDigits[bytes[i] & 0x0f]);
+  }
+  return uuid;
+}
+
+// Returns the configured target with the first "%s" token replaced by the
+// Locality attribute.  TODO(bpawan): C++ does not currently pass the Locality
+// attribute to LB policies, so substitute an empty string, as gRFC A119
+// specifies when the attribute is unavailable.
+std::string EffectiveTarget(const AutoShardingLbConfig& config) {
+  std::string target = config.autosharding_target();
+  const size_t pos = target.find("%s");
+  if (pos != std::string::npos) target.replace(pos, /*count=*/2, "");
+  return target;
+}
 
 //
 // autosharding LB policy
@@ -237,31 +278,16 @@ class AutoshardingLbPolicy final : public LoadBalancingPolicy {
   // TRANSIENT_FAILURE, then status is the status reported by the endpoint.
   void UpdateAggregatedConnectivityStateLocked(absl::Status status);
 
-  // Creates a new autosharding client, which will provide the assignments
-  // used by this policy.
-  // TODO(bpawan): Implement the autosharding client (gRFC A119).  A new
-  // client is created whenever a config update changes the channel factory
-  // key or the autosharding target, both of which are constant for the
-  // lifetime of a given client instance.  The client will be responsible for:
-  // - Maintaining the stream to the autosharding server, retrying with
-  //   appropriate backoff whenever the stream breaks, and ensuring that we
-  //   don't revert to an older generation after restarting the stream.
-  // - Reading assignment chunks from the autosharding server and compiling
-  //   them into a complete assignment, including all necessary validation.
-  //   This will use AutoshardingAssignmentBuilder, which must be recreated
-  //   for each new client so that the accepted generation starts at zero
-  //   (see the builder's comment).
-  // - Sending the client UUID and the last accepted generation in the
-  //   initial request.  The UUID is created by the policy at build time, not
-  //   by the client, and it is reused across client instances and stream
-  //   restarts (gRFC A119).
-  // - Handling the initial assignment timer.  The timer is per client
-  //   instance, because the policy keeps using the previous client's
-  //   assignment until the new client reports its first result.
-  // The client reports results to this policy via
-  // OnAssignmentReceivedLocked().  The policy must ignore callbacks from
-  // superseded client instances, and it keeps using the previous assignment
-  // until the new client reports its first result.
+  // Creates a new autosharding client, which will provide the results used
+  // by this policy.  A new client is created whenever a config update changes
+  // the channel factory key or the effective autosharding target, both of
+  // which are constant for the lifetime of a given client instance.  The
+  // client owns the stream, chunk reassembly/validation (via
+  // AutoshardingAssignmentBuilder, recreated per client so the generation
+  // starts at zero), the initial assignment timer, and the UUID/handshake.
+  // The policy keeps using the previous client's result until the new client
+  // reports its first result, and ignores callbacks from superseded clients
+  // (the client clears its callbacks on Shutdown()).
   void CreateAutoshardingClientLocked();
 
   // Called by the autosharding client to report a new assignment, or a
@@ -274,12 +300,26 @@ class AutoshardingLbPolicy final : public LoadBalancingPolicy {
   std::map<std::string, OrphanablePtr<AutoShardingEndpoint>> endpoint_map_;
   EndpointAddressesList endpoints_;
   ChannelArgs args_;
-  // TODO(bpawan): Until the initial assignment timer fires, the policy must
-  // queue picks and report CONNECTING instead of using this status, so this
-  // placeholder message must never reach a picker.  Fix this when the
-  // autosharding client is implemented.
+  // UUID created at build time and reused across stream restarts and client
+  // instances (gRFC A119).
+  std::string uuid_;
+  // The autosharding target after substituting the Locality attribute.
+  std::string effective_target_;
+  // Transport for the sharding service, cached by channel factory key.  The
+  // channel is reused across client recreations unless the key changes
+  // (gRFC A119).
+  RefCountedPtr<XdsTransport> transport_;
+  std::string transport_channel_factory_key_;
+  // Client for the sharding service.  Recreated whenever the channel factory
+  // key or the effective target changes.
+  RefCountedPtr<AutoshardingClient> client_;
+  // True once a client (current or previous) has reported a result.  Until
+  // then, picks are queued (gRFC A119).
+  bool has_client_result_ = false;
+  // The latest result from the autosharding client.  While has_client_result_
+  // is false, this status is never used.
   absl::StatusOr<AutoshardingAssignment> assignment_ =
-      absl::UnavailableError("invalid_value");
+      absl::UnavailableError("no client result yet");
   RefCountedPtr<SliceMap> slice_map_;
   RefCountedPtr<AutoShardingLbConfig> config_;
   std::string resolution_note_;
@@ -361,17 +401,13 @@ AutoshardingLbPolicy::PickResult AutoshardingLbPolicy::Picker::Pick(
   }
   // Look up the slice covering the key.
   const SliceMap::Entry& slice = slice_map_->Lookup(*key);
-  // Per gRFC A119, a slice for which the server explicitly assigned no
-  // endpoints fails picks, even when fallback is enabled.
-  // TODO(bpawan): Add a policy-level test for this once the autosharding
-  // client can report assignments.  The builder tests only cover the flag
-  // itself.
-  if (slice.fallback_disabled && slice.endpoints.empty()) {
-    return PickResult::Fail(absl::UnavailableError(
+  // Per gRFC A119, picks in a slice for which the server explicitly assigned
+  // no endpoints are dropped, even when fallback is enabled.
+  if (slice.fallback_disabled) {
+    return PickResult::Drop(absl::UnavailableError(
         "no endpoints assigned to this slice and fallback is disabled"));
   }
-  if (!slice.fallback_disabled && IsPoolInFallback(slice.endpoints) &&
-      config_->enable_fallback()) {
+  if (IsPoolInFallback(slice.endpoints) && config_->enable_fallback()) {
     FallbackEndpointIndexIterator iterator(endpoints_.size());
     return PickFromEndpointIndices(iterator, args);
   }
@@ -596,24 +632,38 @@ AutoshardingLbPolicy::SliceMap::SliceMap(
 //
 
 AutoshardingLbPolicy::AutoshardingLbPolicy(Args args)
-    : LoadBalancingPolicy(std::move(args)) {
-  GRPC_TRACE_LOG(autosharding_lb, INFO) << "[AS " << this << "] Created";
+    : LoadBalancingPolicy(std::move(args)), uuid_(GenerateUuid()) {
+  GRPC_TRACE_LOG(autosharding_lb, INFO)
+      << "[AS " << this << "] Created with client UUID " << uuid_;
 }
 
 AutoshardingLbPolicy::~AutoshardingLbPolicy() {
   GRPC_TRACE_LOG(autosharding_lb, INFO)
       << "[AS " << this << "] Destroying AutoshardingLbPolicy";
+  if (client_ != nullptr) {
+    client_->Shutdown();
+    client_.reset();
+  }
+  transport_.reset();
+  transport_channel_factory_key_.clear();
 }
 
 void AutoshardingLbPolicy::ShutdownLocked() {
   GRPC_TRACE_LOG(autosharding_lb, INFO) << "[AS " << this << "] Shutting down";
   shutdown_ = true;
+  if (client_ != nullptr) {
+    client_->Shutdown();
+    client_.reset();
+  }
+  transport_.reset();
+  transport_channel_factory_key_.clear();
   endpoint_map_.clear();
   slice_map_.reset();
   assignment_ = absl::CancelledError("LB policy shut down");
 }
 
 void AutoshardingLbPolicy::ResetBackoffLocked() {
+  if (client_ != nullptr) client_->ResetBackoff();
   for (const auto& [_, endpoint] : endpoint_map_) {
     endpoint->ResetBackoffLocked();
   }
@@ -635,15 +685,15 @@ absl::Status AutoshardingLbPolicy::UpdateLocked(UpdateArgs args) {
   const bool channel_factory_key_changed =
       config_ == nullptr ||
       new_config->channel_factory_key() != config_->channel_factory_key();
-  // TODO(bpawan): Compare the effective autosharding target, i.e. the
-  // configured target after replacing the "%s" token with the Locality
-  // resolver attribute (gRFC A119).  The resolved locality can change in a
-  // resolver update without a config change, which must also create a new
-  // autosharding client (and reset the generation).
+  // Compare the effective target, i.e., the configured target after replacing
+  // the "%s" token with the Locality attribute.  The Locality attribute can
+  // change in a resolver update without a config change, which must also
+  // create a new client (and reset the generation).
+  const std::string new_effective_target = EffectiveTarget(*new_config);
   const bool autosharding_target_changed =
-      config_ == nullptr ||
-      new_config->autosharding_target() != config_->autosharding_target();
+      config_ == nullptr || new_effective_target != effective_target_;
   config_ = std::move(new_config);
+  effective_target_ = new_effective_target;
   if (channel_factory_key_changed || autosharding_target_changed) {
     CreateAutoshardingClientLocked();
   }
@@ -719,14 +769,83 @@ absl::Status AutoshardingLbPolicy::UpdateLocked(UpdateArgs args) {
 void AutoshardingLbPolicy::CreateAutoshardingClientLocked() {
   GRPC_TRACE_LOG(autosharding_lb, INFO)
       << "[AS " << this << "] creating autosharding client for target \""
-      << config_->autosharding_target() << "\" using channel factory key \""
+      << effective_target_ << "\" using channel factory key \""
       << config_->channel_factory_key() << "\"";
-  // TODO(bpawan): Create the autosharding client here (gRFC A119).
+  const std::string& channel_factory_key = config_->channel_factory_key();
+  // Reuse the existing transport unless the channel factory key changed.
+  // gRFC A119 requires the channel to be reused when the target changes but
+  // the key does not; the key is expected to encode all channel parameters.
+  RefCountedPtr<XdsTransport> transport = transport_;
+  if (transport == nullptr ||
+      transport_channel_factory_key_ != channel_factory_key) {
+    transport.reset();
+    transport_.reset();
+    transport_channel_factory_key_.clear();
+    std::string error_message;
+    std::shared_ptr<experimental::ChannelFactory> channel_factory =
+        args_.GetObjectRef<experimental::ChannelFactory>();
+    if (channel_factory == nullptr) {
+      // TODO(bpawan): gRFC A119 requires reporting a bad resolver state here.
+      // No resolver currently provides the channel factory, so report an error
+      // to the picker in the meantime.
+      GRPC_TRACE_LOG(autosharding_lb, INFO)
+          << "[AS " << this << "] no channel factory in channel args";
+      error_message = "no channel factory in channel args";
+    } else {
+      std::unique_ptr<experimental::ChannelFactory::ChannelHandle> handle =
+          channel_factory->CreateChannel(channel_factory_key);
+      if (handle == nullptr) {
+        error_message = "channel factory returned no channel";
+      } else {
+        // The ChannelFactory contract requires implementations to return a
+        // handle obtained from a gRPC-provided factory, so it can be
+        // downcast to ChannelHandleImpl.
+        transport = DownCast<const ChannelHandleImpl&>(*handle).transport();
+        GRPC_CHECK(transport != nullptr);
+        transport_ = transport;
+        transport_channel_factory_key_ = channel_factory_key;
+      }
+    }
+    if (transport == nullptr) {
+      GRPC_TRACE_LOG(autosharding_lb, INFO)
+          << "[AS " << this << "] failed to create channel for key \""
+          << channel_factory_key << "\": " << error_message;
+      if (client_ != nullptr) {
+        client_->Shutdown();
+        client_.reset();
+      }
+      assignment_ = absl::UnavailableError(error_message);
+      has_client_result_ = true;
+      return;
+    }
+  }
+  // Shut down the previous client.  The policy keeps using the previous
+  // result until the new client reports its first result (gRFC A119).
+  if (client_ != nullptr) {
+    client_->Shutdown();
+    client_.reset();
+  }
+  AutoshardingClient::Options options;
+  options.work_serializer = work_serializer();
+  options.event_engine = channel_control_helper()->GetEventEngine();
+  options.transport = std::move(transport);
+  options.target = effective_target_;
+  options.uuid = uuid_;
+  options.initial_assignment_timeout = config_->initial_assignment_timeout();
+  options.on_assignment = [this](AutoshardingAssignment assignment) {
+    OnAssignmentReceivedLocked(std::move(assignment));
+  };
+  options.on_error = [this](absl::Status status) {
+    OnAssignmentReceivedLocked(std::move(status));
+  };
+  client_ = MakeRefCounted<AutoshardingClient>(std::move(options));
+  client_->Start();
 }
 
 void AutoshardingLbPolicy::OnAssignmentReceivedLocked(
     absl::StatusOr<AutoshardingAssignment> assignment) {
   if (shutdown_) return;
+  has_client_result_ = true;
   assignment_ = std::move(assignment);
   // Build a new SliceMap.  If we have no assignment, we reset it.
   slice_map_ = assignment_.ok()
@@ -737,12 +856,16 @@ void AutoshardingLbPolicy::OnAssignmentReceivedLocked(
 
 void AutoshardingLbPolicy::UpdateAggregatedConnectivityStateLocked(
     absl::Status status) {
-  // TODO(bpawan): Once the autosharding client is implemented, if we don't
-  // yet have an assignment, immediately report CONNECTING state with a
-  // queuing picker (and set delay_type per gRFC A121 once supported) without
-  // iterating over endpoints.
-  // If we have no assignment and fallback is disabled, we cannot route any
-  // pick, so report TRANSIENT_FAILURE.
+  // Until the client reports its first result, queue all picks (gRFC A119).
+  // TODO(bpawan): Set delay_type to "autosharding_assignment_pending" per
+  // gRFC A121 once it is supported in C++.
+  if (!has_client_result_) {
+    channel_control_helper()->UpdateState(GRPC_CHANNEL_IDLE, absl::OkStatus(),
+                                          MakeRefCounted<QueuePicker>(nullptr));
+    return;
+  }
+  // If the client reported an error and fallback is disabled, we cannot route
+  // any pick, so report TRANSIENT_FAILURE.
   if (!assignment_.ok() && !config_->enable_fallback()) {
     std::string message(assignment_.status().message());
     if (!resolution_note_.empty()) {
@@ -905,9 +1028,17 @@ void AutoShardingLbConfig::JsonPostLoad(const Json&, const JsonArgs&,
   }
   {
     ValidationErrors::ScopedField field(errors, ".keyHeaderName");
-    if (!errors->FieldHasErrors() &&
-        key_header_name_.as_string_view().empty()) {
-      errors->AddError("must be non-empty");
+    if (!errors->FieldHasErrors()) {
+      absl::string_view key_header_name = key_header_name_.as_string_view();
+      if (key_header_name.empty()) {
+        errors->AddError("must be non-empty");
+      } else {
+        ValidateMetadataResult result =
+            ValidateHeaderKeyIsLegal(key_header_name);
+        if (result != ValidateMetadataResult::kOk) {
+          errors->AddError(ValidateMetadataResultToString(result));
+        }
+      }
     }
   }
   {

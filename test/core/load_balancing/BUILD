@@ -546,6 +546,35 @@ grpc_cc_test(
 )
 
 grpc_cc_test(
+    name = "autosharding_client_test",
+    srcs = ["autosharding_client_test.cc"],
+    external_deps = [
+        "gtest",
+        "absl/functional:any_invocable",
+        "absl/status",
+        "absl/strings",
+    ],
+    uses_event_engine = False,
+    uses_polling = False,
+    deps = [
+        "//:autosharding_upb",
+        "//:event_engine_base_hdrs",
+        "//:orphanable",
+        "//:ref_counted_ptr",
+        "//:work_serializer",
+        "//:xds_transport",
+        "//src/core:grpc_check",
+        "//src/core:grpc_lb_policy_autosharding_client",
+        "//src/core:time",
+        "//src/core:upb_utils",
+        "//src/core:wait_for_single_owner",
+        "//test/core/event_engine/fuzzing_event_engine",
+        "//test/core/test_util:grpc_test_util",
+        "@com_google_protobuf//upb/mem",
+    ],
+)
+
+grpc_cc_test(
     name = "autosharding_config_test",
     srcs = ["autosharding_config_test.cc"],
     external_deps = [
@@ -590,16 +619,23 @@ grpc_cc_test(
     uses_polling = False,
     deps = [
         ":lb_policy_test_lib",
+        "//:autosharding_upb",
         "//:endpoint_addresses",
         "//:gpr",
         "//:grpc_base",
+        "//:grpc_public_hdrs",
+        "//:orphanable",
         "//:ref_counted_ptr",
+        "//:xds_transport",
         "//src/core:channel_args",
+        "//src/core:channel_factory",
         "//src/core:grpc_lb_policy_autosharding",
         "//src/core:json",
         "//src/core:lb_policy",
         "//src/core:time",
+        "//src/core:upb_utils",
         "//test/core/test_util:grpc_test_util",
+        "@com_google_protobuf//upb/mem",
     ],
 )
 

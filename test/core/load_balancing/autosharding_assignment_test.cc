@@ -354,6 +354,13 @@ TEST_F(AutoshardingAssignmentBuilderTest, ZeroGenerationIsStale) {
   EXPECT_EQ(builder_.last_accepted_generation(), 0);
 }
 
+TEST_F(AutoshardingAssignmentBuilderTest, NegativeGenerationIsStale) {
+  AddChunk({{"", std::nullopt, {0}}}, {"host0"});
+  Result result = builder_.Build(-1);
+  EXPECT_EQ(result.outcome, Outcome::kStale);
+  EXPECT_EQ(builder_.last_accepted_generation(), 0);
+}
+
 TEST_F(AutoshardingAssignmentBuilderTest, BuildClearsChunks) {
   AddChunk({{"", std::nullopt, {0}}}, {"host0"});
   EXPECT_EQ(builder_.Build(1).outcome, Outcome::kAccepted);
