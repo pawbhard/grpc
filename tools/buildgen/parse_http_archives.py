@@ -34,6 +34,7 @@ CANONICAL_TO_APPARENT_NAME_MAPPING = {
     "@@envoy_api+": "@envoy_api",
     "@@grpc-proto+": "@grpc_proto",
     "@@autosharding+": "@autosharding",
+    "@@opentelemetry-proto+": "@opentelemetry-proto",
 }
 
 

@@ -1306,6 +1306,8 @@ if(gRPC_BUILD_TESTS)
   endif()
 
   add_custom_target(buildtests_cxx)
+  add_dependencies(buildtests_cxx access_log_filter_test)
+  add_dependencies(buildtests_cxx access_log_formatter_test)
   add_dependencies(buildtests_cxx activity_test)
   if(_gRPC_PLATFORM_LINUX OR _gRPC_PLATFORM_MAC OR _gRPC_PLATFORM_POSIX)
     add_dependencies(buildtests_cxx address_sorting_test)
@@ -2517,6 +2519,8 @@ add_library(grpc
   src/core/ext/upb-gen/envoy/config/trace/v3/xray.upb_minitable.c
   src/core/ext/upb-gen/envoy/config/trace/v3/zipkin.upb_minitable.c
   src/core/ext/upb-gen/envoy/data/accesslog/v3/accesslog.upb_minitable.c
+  src/core/ext/upb-gen/envoy/extensions/access_loggers/grpc/v3/als.upb_minitable.c
+  src/core/ext/upb-gen/envoy/extensions/access_loggers/open_telemetry/v3/logs_service.upb_minitable.c
   src/core/ext/upb-gen/envoy/extensions/clusters/aggregate/v3/cluster.upb_minitable.c
   src/core/ext/upb-gen/envoy/extensions/common/matching/v3/extension_matcher.upb_minitable.c
   src/core/ext/upb-gen/envoy/extensions/filters/common/fault/v3/fault.upb_minitable.c
@@ -2597,6 +2601,7 @@ add_library(grpc
   src/core/ext/upb-gen/grpc/lb/v1/load_balancer.upb_minitable.c
   src/core/ext/upb-gen/grpc/lookup/v1/rls.upb_minitable.c
   src/core/ext/upb-gen/grpc/lookup/v1/rls_config.upb_minitable.c
+  src/core/ext/upb-gen/opentelemetry/proto/common/v1/common.upb_minitable.c
   src/core/ext/upb-gen/src/proto/grpc/channelz/v2/channelz.upb_minitable.c
   src/core/ext/upb-gen/src/proto/grpc/channelz/v2/promise.upb_minitable.c
   src/core/ext/upb-gen/src/proto/grpc/channelz/v2/property_list.upb_minitable.c
@@ -2702,6 +2707,8 @@ add_library(grpc
   src/core/ext/upbdefs-gen/envoy/config/trace/v3/xray.upbdefs.c
   src/core/ext/upbdefs-gen/envoy/config/trace/v3/zipkin.upbdefs.c
   src/core/ext/upbdefs-gen/envoy/data/accesslog/v3/accesslog.upbdefs.c
+  src/core/ext/upbdefs-gen/envoy/extensions/access_loggers/grpc/v3/als.upbdefs.c
+  src/core/ext/upbdefs-gen/envoy/extensions/access_loggers/open_telemetry/v3/logs_service.upbdefs.c
   src/core/ext/upbdefs-gen/envoy/extensions/clusters/aggregate/v3/cluster.upbdefs.c
   src/core/ext/upbdefs-gen/envoy/extensions/common/matching/v3/extension_matcher.upbdefs.c
   src/core/ext/upbdefs-gen/envoy/extensions/filters/common/fault/v3/fault.upbdefs.c
@@ -2768,6 +2775,7 @@ add_library(grpc
   src/core/ext/upbdefs-gen/google/rpc/status.upbdefs.c
   src/core/ext/upbdefs-gen/grpc/channelz/v1/channelz.upbdefs.c
   src/core/ext/upbdefs-gen/grpc/lookup/v1/rls_config.upbdefs.c
+  src/core/ext/upbdefs-gen/opentelemetry/proto/common/v1/common.upbdefs.c
   src/core/ext/upbdefs-gen/src/proto/grpc/channelz/v2/channelz.upbdefs.c
   src/core/ext/upbdefs-gen/src/proto/grpc/channelz/v2/promise.upbdefs.c
   src/core/ext/upbdefs-gen/src/proto/grpc/channelz/v2/property_list.upbdefs.c
@@ -2802,6 +2810,9 @@ add_library(grpc
   src/core/ext/upbdefs-gen/xds/type/v3/cel.upbdefs.c
   src/core/ext/upbdefs-gen/xds/type/v3/range.upbdefs.c
   src/core/ext/upbdefs-gen/xds/type/v3/typed_struct.upbdefs.c
+  src/core/filter/access_log/access_log_filter.cc
+  src/core/filter/access_log/access_log_formatter.cc
+  src/core/filter/access_log/otel_access_log_sink.cc
   src/core/filter/auth/client_auth_filter.cc
   src/core/filter/auth/server_auth_filter.cc
   src/core/filter/composite/composite_filter.cc
@@ -3148,6 +3159,7 @@ add_library(grpc
   src/core/xds/grpc/certificate_provider_store.cc
   src/core/xds/grpc/file_watcher_certificate_provider_factory.cc
   src/core/xds/grpc/streaming_call_promise_wrapper.cc
+  src/core/xds/grpc/xds_access_log.cc
   src/core/xds/grpc/xds_audit_logger_registry.cc
   src/core/xds/grpc/xds_bootstrap_grpc.cc
   src/core/xds/grpc/xds_bootstrap_grpc_builder.cc
@@ -6901,6 +6913,107 @@ if(_gRPC_PLATFORM_LINUX OR _gRPC_PLATFORM_POSIX OR _gRPC_PLATFORM_WINDOWS)
 
 
 endif()
+endif()
+if(gRPC_BUILD_TESTS)
+
+add_executable(access_log_filter_test
+  ${_gRPC_PROTO_GENS_DIR}/test/core/event_engine/fuzzing_event_engine/fuzzing_event_engine.pb.cc
+  ${_gRPC_PROTO_GENS_DIR}/test/core/event_engine/fuzzing_event_engine/fuzzing_event_engine.grpc.pb.cc
+  ${_gRPC_PROTO_GENS_DIR}/test/core/event_engine/fuzzing_event_engine/fuzzing_event_engine.pb.h
+  ${_gRPC_PROTO_GENS_DIR}/test/core/event_engine/fuzzing_event_engine/fuzzing_event_engine.grpc.pb.h
+  test/core/event_engine/event_engine_test_utils.cc
+  test/core/event_engine/fuzzing_event_engine/fuzzing_event_engine.cc
+  test/core/filters/access_log_filter_test.cc
+  test/core/filters/filter_test_v2.cc
+  third_party/googletest/googlemock/src/gmock_main.cc
+)
+if(WIN32 AND MSVC)
+  if(BUILD_SHARED_LIBS)
+    target_compile_definitions(access_log_filter_test
+    PRIVATE
+      "GPR_DLL_IMPORTS"
+      "GRPC_DLL_IMPORTS"
+    )
+  endif()
+endif()
+target_compile_features(access_log_filter_test PUBLIC cxx_std_17)
+target_include_directories(access_log_filter_test
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${_gRPC_ADDRESS_SORTING_INCLUDE_DIR}
+    ${_gRPC_CEL_C_INCLUDE_DIR}
+    ${_gRPC_RE2_INCLUDE_DIR}
+    ${_gRPC_SSL_INCLUDE_DIR}
+    ${_gRPC_UPB_GENERATED_DIR}
+    ${_gRPC_UPB_GRPC_GENERATED_DIR}
+    ${_gRPC_UPB_INCLUDE_DIR}
+    ${_gRPC_XXHASH_INCLUDE_DIR}
+    ${_gRPC_ZLIB_INCLUDE_DIR}
+    third_party/googletest/googletest/include
+    third_party/googletest/googletest
+    third_party/googletest/googlemock/include
+    third_party/googletest/googlemock
+    ${_gRPC_PROTO_GENS_DIR}
+)
+
+target_link_libraries(access_log_filter_test
+  ${_gRPC_ALLTARGETS_LIBRARIES}
+  gtest
+  ${_gRPC_PROTOBUF_LIBRARIES}
+  grpc_test_util
+)
+
+
+endif()
+if(gRPC_BUILD_TESTS)
+
+add_executable(access_log_formatter_test
+  src/core/filter/access_log/access_log_formatter.cc
+  src/core/util/time.cc
+  test/core/filters/access_log_formatter_test.cc
+  third_party/googletest/googlemock/src/gmock_main.cc
+)
+if(WIN32 AND MSVC)
+  if(BUILD_SHARED_LIBS)
+    target_compile_definitions(access_log_formatter_test
+    PRIVATE
+      "GPR_DLL_IMPORTS"
+    )
+  endif()
+endif()
+target_compile_features(access_log_formatter_test PUBLIC cxx_std_17)
+target_include_directories(access_log_formatter_test
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${_gRPC_ADDRESS_SORTING_INCLUDE_DIR}
+    ${_gRPC_CEL_C_INCLUDE_DIR}
+    ${_gRPC_RE2_INCLUDE_DIR}
+    ${_gRPC_SSL_INCLUDE_DIR}
+    ${_gRPC_UPB_GENERATED_DIR}
+    ${_gRPC_UPB_GRPC_GENERATED_DIR}
+    ${_gRPC_UPB_INCLUDE_DIR}
+    ${_gRPC_XXHASH_INCLUDE_DIR}
+    ${_gRPC_ZLIB_INCLUDE_DIR}
+    third_party/googletest/googletest/include
+    third_party/googletest/googletest
+    third_party/googletest/googlemock/include
+    third_party/googletest/googlemock
+    ${_gRPC_PROTO_GENS_DIR}
+)
+
+target_link_libraries(access_log_formatter_test
+  ${_gRPC_ALLTARGETS_LIBRARIES}
+  gtest
+  absl::flat_hash_map
+  absl::statusor
+  absl::span
+  absl::utility
+  gpr
+)
+
+
 endif()
 if(gRPC_BUILD_TESTS)
 

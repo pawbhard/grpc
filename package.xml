@@ -684,6 +684,12 @@
     <file baseinstalldir="/" name="src/core/ext/upb-gen/envoy/data/accesslog/v3/accesslog.upb.h" role="src" />
     <file baseinstalldir="/" name="src/core/ext/upb-gen/envoy/data/accesslog/v3/accesslog.upb_minitable.c" role="src" />
     <file baseinstalldir="/" name="src/core/ext/upb-gen/envoy/data/accesslog/v3/accesslog.upb_minitable.h" role="src" />
+    <file baseinstalldir="/" name="src/core/ext/upb-gen/envoy/extensions/access_loggers/grpc/v3/als.upb.h" role="src" />
+    <file baseinstalldir="/" name="src/core/ext/upb-gen/envoy/extensions/access_loggers/grpc/v3/als.upb_minitable.c" role="src" />
+    <file baseinstalldir="/" name="src/core/ext/upb-gen/envoy/extensions/access_loggers/grpc/v3/als.upb_minitable.h" role="src" />
+    <file baseinstalldir="/" name="src/core/ext/upb-gen/envoy/extensions/access_loggers/open_telemetry/v3/logs_service.upb.h" role="src" />
+    <file baseinstalldir="/" name="src/core/ext/upb-gen/envoy/extensions/access_loggers/open_telemetry/v3/logs_service.upb_minitable.c" role="src" />
+    <file baseinstalldir="/" name="src/core/ext/upb-gen/envoy/extensions/access_loggers/open_telemetry/v3/logs_service.upb_minitable.h" role="src" />
     <file baseinstalldir="/" name="src/core/ext/upb-gen/envoy/extensions/clusters/aggregate/v3/cluster.upb.h" role="src" />
     <file baseinstalldir="/" name="src/core/ext/upb-gen/envoy/extensions/clusters/aggregate/v3/cluster.upb_minitable.c" role="src" />
     <file baseinstalldir="/" name="src/core/ext/upb-gen/envoy/extensions/clusters/aggregate/v3/cluster.upb_minitable.h" role="src" />
@@ -927,6 +933,9 @@
     <file baseinstalldir="/" name="src/core/ext/upb-gen/grpc/lookup/v1/rls_config.upb.h" role="src" />
     <file baseinstalldir="/" name="src/core/ext/upb-gen/grpc/lookup/v1/rls_config.upb_minitable.c" role="src" />
     <file baseinstalldir="/" name="src/core/ext/upb-gen/grpc/lookup/v1/rls_config.upb_minitable.h" role="src" />
+    <file baseinstalldir="/" name="src/core/ext/upb-gen/opentelemetry/proto/common/v1/common.upb.h" role="src" />
+    <file baseinstalldir="/" name="src/core/ext/upb-gen/opentelemetry/proto/common/v1/common.upb_minitable.c" role="src" />
+    <file baseinstalldir="/" name="src/core/ext/upb-gen/opentelemetry/proto/common/v1/common.upb_minitable.h" role="src" />
     <file baseinstalldir="/" name="src/core/ext/upb-gen/src/proto/grpc/channelz/v2/channelz.upb.h" role="src" />
     <file baseinstalldir="/" name="src/core/ext/upb-gen/src/proto/grpc/channelz/v2/channelz.upb_minitable.c" role="src" />
     <file baseinstalldir="/" name="src/core/ext/upb-gen/src/proto/grpc/channelz/v2/channelz.upb_minitable.h" role="src" />
@@ -1173,6 +1182,10 @@
     <file baseinstalldir="/" name="src/core/ext/upbdefs-gen/envoy/config/trace/v3/zipkin.upbdefs.h" role="src" />
     <file baseinstalldir="/" name="src/core/ext/upbdefs-gen/envoy/data/accesslog/v3/accesslog.upbdefs.c" role="src" />
     <file baseinstalldir="/" name="src/core/ext/upbdefs-gen/envoy/data/accesslog/v3/accesslog.upbdefs.h" role="src" />
+    <file baseinstalldir="/" name="src/core/ext/upbdefs-gen/envoy/extensions/access_loggers/grpc/v3/als.upbdefs.c" role="src" />
+    <file baseinstalldir="/" name="src/core/ext/upbdefs-gen/envoy/extensions/access_loggers/grpc/v3/als.upbdefs.h" role="src" />
+    <file baseinstalldir="/" name="src/core/ext/upbdefs-gen/envoy/extensions/access_loggers/open_telemetry/v3/logs_service.upbdefs.c" role="src" />
+    <file baseinstalldir="/" name="src/core/ext/upbdefs-gen/envoy/extensions/access_loggers/open_telemetry/v3/logs_service.upbdefs.h" role="src" />
     <file baseinstalldir="/" name="src/core/ext/upbdefs-gen/envoy/extensions/clusters/aggregate/v3/cluster.upbdefs.c" role="src" />
     <file baseinstalldir="/" name="src/core/ext/upbdefs-gen/envoy/extensions/clusters/aggregate/v3/cluster.upbdefs.h" role="src" />
     <file baseinstalldir="/" name="src/core/ext/upbdefs-gen/envoy/extensions/common/matching/v3/extension_matcher.upbdefs.c" role="src" />
@@ -1305,6 +1318,8 @@
     <file baseinstalldir="/" name="src/core/ext/upbdefs-gen/grpc/channelz/v1/channelz.upbdefs.h" role="src" />
     <file baseinstalldir="/" name="src/core/ext/upbdefs-gen/grpc/lookup/v1/rls_config.upbdefs.c" role="src" />
     <file baseinstalldir="/" name="src/core/ext/upbdefs-gen/grpc/lookup/v1/rls_config.upbdefs.h" role="src" />
+    <file baseinstalldir="/" name="src/core/ext/upbdefs-gen/opentelemetry/proto/common/v1/common.upbdefs.c" role="src" />
+    <file baseinstalldir="/" name="src/core/ext/upbdefs-gen/opentelemetry/proto/common/v1/common.upbdefs.h" role="src" />
     <file baseinstalldir="/" name="src/core/ext/upbdefs-gen/src/proto/grpc/channelz/v2/channelz.upbdefs.c" role="src" />
     <file baseinstalldir="/" name="src/core/ext/upbdefs-gen/src/proto/grpc/channelz/v2/channelz.upbdefs.h" role="src" />
     <file baseinstalldir="/" name="src/core/ext/upbdefs-gen/src/proto/grpc/channelz/v2/promise.upbdefs.c" role="src" />
@@ -1373,6 +1388,13 @@
     <file baseinstalldir="/" name="src/core/ext/upbdefs-gen/xds/type/v3/range.upbdefs.h" role="src" />
     <file baseinstalldir="/" name="src/core/ext/upbdefs-gen/xds/type/v3/typed_struct.upbdefs.c" role="src" />
     <file baseinstalldir="/" name="src/core/ext/upbdefs-gen/xds/type/v3/typed_struct.upbdefs.h" role="src" />
+    <file baseinstalldir="/" name="src/core/filter/access_log/access_log_filter.cc" role="src" />
+    <file baseinstalldir="/" name="src/core/filter/access_log/access_log_filter.h" role="src" />
+    <file baseinstalldir="/" name="src/core/filter/access_log/access_log_formatter.cc" role="src" />
+    <file baseinstalldir="/" name="src/core/filter/access_log/access_log_formatter.h" role="src" />
+    <file baseinstalldir="/" name="src/core/filter/access_log/access_log_sink.h" role="src" />
+    <file baseinstalldir="/" name="src/core/filter/access_log/otel_access_log_sink.cc" role="src" />
+    <file baseinstalldir="/" name="src/core/filter/access_log/otel_access_log_sink.h" role="src" />
     <file baseinstalldir="/" name="src/core/filter/auth/auth_filters.h" role="src" />
     <file baseinstalldir="/" name="src/core/filter/auth/client_auth_filter.cc" role="src" />
     <file baseinstalldir="/" name="src/core/filter/auth/server_auth_filter.cc" role="src" />
@@ -2208,6 +2230,8 @@
     <file baseinstalldir="/" name="src/core/xds/grpc/file_watcher_certificate_provider_factory.h" role="src" />
     <file baseinstalldir="/" name="src/core/xds/grpc/streaming_call_promise_wrapper.cc" role="src" />
     <file baseinstalldir="/" name="src/core/xds/grpc/streaming_call_promise_wrapper.h" role="src" />
+    <file baseinstalldir="/" name="src/core/xds/grpc/xds_access_log.cc" role="src" />
+    <file baseinstalldir="/" name="src/core/xds/grpc/xds_access_log.h" role="src" />
     <file baseinstalldir="/" name="src/core/xds/grpc/xds_audit_logger_registry.cc" role="src" />
     <file baseinstalldir="/" name="src/core/xds/grpc/xds_audit_logger_registry.h" role="src" />
     <file baseinstalldir="/" name="src/core/xds/grpc/xds_bootstrap_grpc.cc" role="src" />

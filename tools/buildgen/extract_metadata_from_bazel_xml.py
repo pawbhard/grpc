@@ -93,6 +93,7 @@ EXTERNAL_LINKS = {
     "@opencensus_proto//": "",
     "@grpc_proto//": "",
     "@autosharding//": "",
+    "@opentelemetry-proto//": "",
 }
 
 EXTERNAL_PROTO_LIBRARIES = {

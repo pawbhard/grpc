@@ -1672,6 +1672,12 @@ src/core/ext/upb-gen/envoy/config/trace/v3/zipkin.upb_minitable.h \
 src/core/ext/upb-gen/envoy/data/accesslog/v3/accesslog.upb.h \
 src/core/ext/upb-gen/envoy/data/accesslog/v3/accesslog.upb_minitable.c \
 src/core/ext/upb-gen/envoy/data/accesslog/v3/accesslog.upb_minitable.h \
+src/core/ext/upb-gen/envoy/extensions/access_loggers/grpc/v3/als.upb.h \
+src/core/ext/upb-gen/envoy/extensions/access_loggers/grpc/v3/als.upb_minitable.c \
+src/core/ext/upb-gen/envoy/extensions/access_loggers/grpc/v3/als.upb_minitable.h \
+src/core/ext/upb-gen/envoy/extensions/access_loggers/open_telemetry/v3/logs_service.upb.h \
+src/core/ext/upb-gen/envoy/extensions/access_loggers/open_telemetry/v3/logs_service.upb_minitable.c \
+src/core/ext/upb-gen/envoy/extensions/access_loggers/open_telemetry/v3/logs_service.upb_minitable.h \
 src/core/ext/upb-gen/envoy/extensions/clusters/aggregate/v3/cluster.upb.h \
 src/core/ext/upb-gen/envoy/extensions/clusters/aggregate/v3/cluster.upb_minitable.c \
 src/core/ext/upb-gen/envoy/extensions/clusters/aggregate/v3/cluster.upb_minitable.h \
@@ -1912,6 +1918,9 @@ src/core/ext/upb-gen/grpc/lookup/v1/rls.upb_minitable.h \
 src/core/ext/upb-gen/grpc/lookup/v1/rls_config.upb.h \
 src/core/ext/upb-gen/grpc/lookup/v1/rls_config.upb_minitable.c \
 src/core/ext/upb-gen/grpc/lookup/v1/rls_config.upb_minitable.h \
+src/core/ext/upb-gen/opentelemetry/proto/common/v1/common.upb.h \
+src/core/ext/upb-gen/opentelemetry/proto/common/v1/common.upb_minitable.c \
+src/core/ext/upb-gen/opentelemetry/proto/common/v1/common.upb_minitable.h \
 src/core/ext/upb-gen/src/proto/grpc/channelz/v2/channelz.upb.h \
 src/core/ext/upb-gen/src/proto/grpc/channelz/v2/channelz.upb_minitable.c \
 src/core/ext/upb-gen/src/proto/grpc/channelz/v2/channelz.upb_minitable.h \
@@ -2158,6 +2167,10 @@ src/core/ext/upbdefs-gen/envoy/config/trace/v3/zipkin.upbdefs.c \
 src/core/ext/upbdefs-gen/envoy/config/trace/v3/zipkin.upbdefs.h \
 src/core/ext/upbdefs-gen/envoy/data/accesslog/v3/accesslog.upbdefs.c \
 src/core/ext/upbdefs-gen/envoy/data/accesslog/v3/accesslog.upbdefs.h \
+src/core/ext/upbdefs-gen/envoy/extensions/access_loggers/grpc/v3/als.upbdefs.c \
+src/core/ext/upbdefs-gen/envoy/extensions/access_loggers/grpc/v3/als.upbdefs.h \
+src/core/ext/upbdefs-gen/envoy/extensions/access_loggers/open_telemetry/v3/logs_service.upbdefs.c \
+src/core/ext/upbdefs-gen/envoy/extensions/access_loggers/open_telemetry/v3/logs_service.upbdefs.h \
 src/core/ext/upbdefs-gen/envoy/extensions/clusters/aggregate/v3/cluster.upbdefs.c \
 src/core/ext/upbdefs-gen/envoy/extensions/clusters/aggregate/v3/cluster.upbdefs.h \
 src/core/ext/upbdefs-gen/envoy/extensions/common/matching/v3/extension_matcher.upbdefs.c \
@@ -2290,6 +2303,8 @@ src/core/ext/upbdefs-gen/grpc/channelz/v1/channelz.upbdefs.c \
 src/core/ext/upbdefs-gen/grpc/channelz/v1/channelz.upbdefs.h \
 src/core/ext/upbdefs-gen/grpc/lookup/v1/rls_config.upbdefs.c \
 src/core/ext/upbdefs-gen/grpc/lookup/v1/rls_config.upbdefs.h \
+src/core/ext/upbdefs-gen/opentelemetry/proto/common/v1/common.upbdefs.c \
+src/core/ext/upbdefs-gen/opentelemetry/proto/common/v1/common.upbdefs.h \
 src/core/ext/upbdefs-gen/src/proto/grpc/channelz/v2/channelz.upbdefs.c \
 src/core/ext/upbdefs-gen/src/proto/grpc/channelz/v2/channelz.upbdefs.h \
 src/core/ext/upbdefs-gen/src/proto/grpc/channelz/v2/promise.upbdefs.c \
@@ -2358,6 +2373,13 @@ src/core/ext/upbdefs-gen/xds/type/v3/range.upbdefs.c \
 src/core/ext/upbdefs-gen/xds/type/v3/range.upbdefs.h \
 src/core/ext/upbdefs-gen/xds/type/v3/typed_struct.upbdefs.c \
 src/core/ext/upbdefs-gen/xds/type/v3/typed_struct.upbdefs.h \
+src/core/filter/access_log/access_log_filter.cc \
+src/core/filter/access_log/access_log_filter.h \
+src/core/filter/access_log/access_log_formatter.cc \
+src/core/filter/access_log/access_log_formatter.h \
+src/core/filter/access_log/access_log_sink.h \
+src/core/filter/access_log/otel_access_log_sink.cc \
+src/core/filter/access_log/otel_access_log_sink.h \
 src/core/filter/auth/auth_filters.h \
 src/core/filter/auth/client_auth_filter.cc \
 src/core/filter/auth/server_auth_filter.cc \
@@ -3193,6 +3215,8 @@ src/core/xds/grpc/file_watcher_certificate_provider_factory.cc \
 src/core/xds/grpc/file_watcher_certificate_provider_factory.h \
 src/core/xds/grpc/streaming_call_promise_wrapper.cc \
 src/core/xds/grpc/streaming_call_promise_wrapper.h \
+src/core/xds/grpc/xds_access_log.cc \
+src/core/xds/grpc/xds_access_log.h \
 src/core/xds/grpc/xds_audit_logger_registry.cc \
 src/core/xds/grpc/xds_audit_logger_registry.h \
 src/core/xds/grpc/xds_bootstrap_grpc.cc \

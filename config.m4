@@ -285,6 +285,8 @@ if test "$PHP_GRPC" != "no"; then
     src/core/ext/upb-gen/envoy/config/trace/v3/xray.upb_minitable.c \
     src/core/ext/upb-gen/envoy/config/trace/v3/zipkin.upb_minitable.c \
     src/core/ext/upb-gen/envoy/data/accesslog/v3/accesslog.upb_minitable.c \
+    src/core/ext/upb-gen/envoy/extensions/access_loggers/grpc/v3/als.upb_minitable.c \
+    src/core/ext/upb-gen/envoy/extensions/access_loggers/open_telemetry/v3/logs_service.upb_minitable.c \
     src/core/ext/upb-gen/envoy/extensions/clusters/aggregate/v3/cluster.upb_minitable.c \
     src/core/ext/upb-gen/envoy/extensions/common/matching/v3/extension_matcher.upb_minitable.c \
     src/core/ext/upb-gen/envoy/extensions/filters/common/fault/v3/fault.upb_minitable.c \
@@ -366,6 +368,7 @@ if test "$PHP_GRPC" != "no"; then
     src/core/ext/upb-gen/grpc/lb/v1/load_balancer.upb_minitable.c \
     src/core/ext/upb-gen/grpc/lookup/v1/rls.upb_minitable.c \
     src/core/ext/upb-gen/grpc/lookup/v1/rls_config.upb_minitable.c \
+    src/core/ext/upb-gen/opentelemetry/proto/common/v1/common.upb_minitable.c \
     src/core/ext/upb-gen/src/proto/grpc/channelz/v2/channelz.upb_minitable.c \
     src/core/ext/upb-gen/src/proto/grpc/channelz/v2/promise.upb_minitable.c \
     src/core/ext/upb-gen/src/proto/grpc/channelz/v2/property_list.upb_minitable.c \
@@ -471,6 +474,8 @@ if test "$PHP_GRPC" != "no"; then
     src/core/ext/upbdefs-gen/envoy/config/trace/v3/xray.upbdefs.c \
     src/core/ext/upbdefs-gen/envoy/config/trace/v3/zipkin.upbdefs.c \
     src/core/ext/upbdefs-gen/envoy/data/accesslog/v3/accesslog.upbdefs.c \
+    src/core/ext/upbdefs-gen/envoy/extensions/access_loggers/grpc/v3/als.upbdefs.c \
+    src/core/ext/upbdefs-gen/envoy/extensions/access_loggers/open_telemetry/v3/logs_service.upbdefs.c \
     src/core/ext/upbdefs-gen/envoy/extensions/clusters/aggregate/v3/cluster.upbdefs.c \
     src/core/ext/upbdefs-gen/envoy/extensions/common/matching/v3/extension_matcher.upbdefs.c \
     src/core/ext/upbdefs-gen/envoy/extensions/filters/common/fault/v3/fault.upbdefs.c \
@@ -537,6 +542,7 @@ if test "$PHP_GRPC" != "no"; then
     src/core/ext/upbdefs-gen/google/rpc/status.upbdefs.c \
     src/core/ext/upbdefs-gen/grpc/channelz/v1/channelz.upbdefs.c \
     src/core/ext/upbdefs-gen/grpc/lookup/v1/rls_config.upbdefs.c \
+    src/core/ext/upbdefs-gen/opentelemetry/proto/common/v1/common.upbdefs.c \
     src/core/ext/upbdefs-gen/src/proto/grpc/channelz/v2/channelz.upbdefs.c \
     src/core/ext/upbdefs-gen/src/proto/grpc/channelz/v2/promise.upbdefs.c \
     src/core/ext/upbdefs-gen/src/proto/grpc/channelz/v2/property_list.upbdefs.c \
@@ -571,6 +577,9 @@ if test "$PHP_GRPC" != "no"; then
     src/core/ext/upbdefs-gen/xds/type/v3/cel.upbdefs.c \
     src/core/ext/upbdefs-gen/xds/type/v3/range.upbdefs.c \
     src/core/ext/upbdefs-gen/xds/type/v3/typed_struct.upbdefs.c \
+    src/core/filter/access_log/access_log_filter.cc \
+    src/core/filter/access_log/access_log_formatter.cc \
+    src/core/filter/access_log/otel_access_log_sink.cc \
     src/core/filter/auth/client_auth_filter.cc \
     src/core/filter/auth/server_auth_filter.cc \
     src/core/filter/composite/composite_filter.cc \
@@ -954,6 +963,7 @@ if test "$PHP_GRPC" != "no"; then
     src/core/xds/grpc/certificate_provider_store.cc \
     src/core/xds/grpc/file_watcher_certificate_provider_factory.cc \
     src/core/xds/grpc/streaming_call_promise_wrapper.cc \
+    src/core/xds/grpc/xds_access_log.cc \
     src/core/xds/grpc/xds_audit_logger_registry.cc \
     src/core/xds/grpc/xds_bootstrap_grpc.cc \
     src/core/xds/grpc/xds_bootstrap_grpc_builder.cc \
@@ -1580,6 +1590,8 @@ if test "$PHP_GRPC" != "no"; then
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upb-gen/envoy/config/tap/v3)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upb-gen/envoy/config/trace/v3)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upb-gen/envoy/data/accesslog/v3)
+  PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upb-gen/envoy/extensions/access_loggers/grpc/v3)
+  PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upb-gen/envoy/extensions/access_loggers/open_telemetry/v3)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upb-gen/envoy/extensions/clusters/aggregate/v3)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upb-gen/envoy/extensions/common/matching/v3)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upb-gen/envoy/extensions/filters/common/fault/v3)
@@ -1622,6 +1634,7 @@ if test "$PHP_GRPC" != "no"; then
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upb-gen/grpc/health/v1)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upb-gen/grpc/lb/v1)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upb-gen/grpc/lookup/v1)
+  PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upb-gen/opentelemetry/proto/common/v1)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upb-gen/src/proto/grpc/channelz/v2)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upb-gen/udpa/annotations)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upb-gen/validate)
@@ -1649,6 +1662,8 @@ if test "$PHP_GRPC" != "no"; then
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upbdefs-gen/envoy/config/tap/v3)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upbdefs-gen/envoy/config/trace/v3)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upbdefs-gen/envoy/data/accesslog/v3)
+  PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upbdefs-gen/envoy/extensions/access_loggers/grpc/v3)
+  PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upbdefs-gen/envoy/extensions/access_loggers/open_telemetry/v3)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upbdefs-gen/envoy/extensions/clusters/aggregate/v3)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upbdefs-gen/envoy/extensions/common/matching/v3)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upbdefs-gen/envoy/extensions/filters/common/fault/v3)
@@ -1679,6 +1694,7 @@ if test "$PHP_GRPC" != "no"; then
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upbdefs-gen/google/rpc)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upbdefs-gen/grpc/channelz/v1)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upbdefs-gen/grpc/lookup/v1)
+  PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upbdefs-gen/opentelemetry/proto/common/v1)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upbdefs-gen/src/proto/grpc/channelz/v2)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upbdefs-gen/udpa/annotations)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upbdefs-gen/validate)
@@ -1687,6 +1703,7 @@ if test "$PHP_GRPC" != "no"; then
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upbdefs-gen/xds/type/matcher/v3)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/ext/upbdefs-gen/xds/type/v3)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/filter)
+  PHP_ADD_BUILD_DIR($ext_builddir/src/core/filter/access_log)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/filter/auth)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/filter/composite)
   PHP_ADD_BUILD_DIR($ext_builddir/src/core/filter/ext_proc)
