@@ -5921,6 +5921,63 @@ grpc_cc_library(
 )
 
 grpc_cc_library(
+    name = "access_log_filter",
+    srcs = [
+        "filter/access_log/access_log_filter.cc",
+    ],
+    hdrs = [
+        "filter/access_log/access_log_filter.h",
+        "filter/access_log/access_log_sink.h",
+    ],
+    external_deps = [
+        "absl/status",
+        "absl/status:statusor",
+        "absl/strings",
+        "absl/time",
+    ],
+    deps = [
+        "access_log_formatter",
+        "blackboard",
+        "call_final_info",
+        "channel_args",
+        "default_event_engine",
+        "down_cast",
+        "filter_args",
+        "match",
+        "metadata_batch",
+        "time",
+        "unique_type_name",
+        "//:exec_ctx",
+        "//:gpr",
+        "//:grpc_base",
+        "//:ref_counted_ptr",
+        "//:uri",
+    ],
+)
+
+grpc_cc_library(
+    name = "otel_access_log_sink",
+    srcs = [
+        "filter/access_log/otel_access_log_sink.cc",
+    ],
+    hdrs = [
+        "filter/access_log/otel_access_log_sink.h",
+    ],
+    external_deps = [
+        "absl/functional:any_invocable",
+        "absl/status",
+    ],
+    deps = [
+        "access_log_filter",
+        "no_destruct",
+        "ref_counted",
+        "sync",
+        "time",
+        "//:ref_counted_ptr",
+    ],
+)
+
+grpc_cc_library(
     name = "ext_proc_messages",
     srcs = [
         "filter/ext_proc/ext_proc_messages.cc",
