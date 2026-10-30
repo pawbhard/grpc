@@ -5900,6 +5900,27 @@ grpc_cc_library(
 )
 
 grpc_cc_library(
+    name = "access_log_formatter",
+    srcs = [
+        "filter/access_log/access_log_formatter.cc",
+    ],
+    hdrs = [
+        "filter/access_log/access_log_formatter.h",
+    ],
+    external_deps = [
+        "absl/container:flat_hash_map",
+        "absl/status",
+        "absl/status:statusor",
+        "absl/strings",
+        "absl/time",
+    ],
+    deps = [
+        "time",
+        "//:grpc_status",
+    ],
+)
+
+grpc_cc_library(
     name = "ext_proc_messages",
     srcs = [
         "filter/ext_proc/ext_proc_messages.cc",
