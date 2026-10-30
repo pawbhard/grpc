@@ -246,3 +246,33 @@ grpc_cc_test(
         "//test/cpp/end2end:test_service_impl",
     ],
 )
+
+grpc_cc_test(
+    name = "otel_access_log_test",
+    srcs = [
+        "otel_access_log_test.cc",
+    ],
+    external_deps = [
+        "absl/status",
+        "absl/time",
+        "gtest",
+        "otel/api",
+        "otel/sdk/src/logs",
+    ],
+    # Needs the OTLP C++ protos and the OpenTelemetry logs SDK, which only
+    # Bazel builds.
+    tags = [
+        "bazel_only",
+        "grpc:otel-namespace-calamity",
+    ],
+    deps = [
+        "//:grpc",
+        "//:ref_counted_ptr",
+        "//src/core:access_log_filter",
+        "//src/core:otel_access_log_sink",
+        "//src/core:sync",
+        "//src/cpp/ext/otel:otel_access_log",
+        "//test/core/test_util:grpc_test_util",
+        "@opentelemetry-proto//:logs_service_proto_cc",
+    ],
+)

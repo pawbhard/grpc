@@ -989,3 +989,39 @@ grpc_cc_test(
         "@envoy_api//envoy/service/ext_proc/v3:pkg_cc_proto",
     ],
 )
+
+grpc_cc_test(
+    name = "xds_otel_access_log_end2end_test",
+    size = "large",
+    srcs = ["xds_otel_access_log_end2end_test.cc"],
+    external_deps = [
+        "absl/strings",
+        "absl/time",
+        "gtest",
+    ],
+    linkstatic = True,
+    # Needs the OTLP C++ protos and the OpenTelemetry logs SDK, which only
+    # Bazel builds.
+    tags = [
+        "bazel_only",
+        "grpc:otel-namespace-calamity",
+        "no_test_ios",
+        "no_windows",
+        "xds_end2end_test",
+    ],
+    deps = [
+        ":xds_end2end_test_lib",
+        "//:config_vars",
+        "//:gpr",
+        "//:grpc",
+        "//:grpc++",
+        "//:grpcpp_otel_access_log",
+        "//src/core:sync",
+        "//test/core/test_util:grpc_test_util",
+        "//test/core/test_util:scoped_env_var",
+        "@envoy_api//envoy/extensions/access_loggers/open_telemetry/v3:pkg_cc_proto",
+        "@envoy_api//envoy/extensions/filters/network/http_connection_manager/v3:pkg_cc_proto",
+        "@envoy_api//envoy/extensions/grpc_service/channel_credentials/insecure/v3:pkg_cc_proto",
+        "@opentelemetry-proto//:logs_service_proto_cc",
+    ],
+)

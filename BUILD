@@ -3290,6 +3290,22 @@ grpc_cc_library(
 )
 
 grpc_cc_library(
+    name = "grpcpp_otel_access_log",
+    hdrs = [
+        "include/grpcpp/ext/otel_access_log.h",
+    ],
+    tags = [
+        # This can be removed once we can add top-level BUILD file targets without them being
+        # included in Core Components.
+        "grpc:broken-internally",
+    ],
+    deps = [
+        ":grpc++",
+        "//src/cpp/ext/otel:otel_access_log",
+    ],
+)
+
+grpc_cc_library(
     name = "generic_stub_internal",
     hdrs = [
         "include/grpcpp/impl/generic_stub_internal.h",
