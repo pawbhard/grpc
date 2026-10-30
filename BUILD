@@ -5294,6 +5294,11 @@ grpc_upb_proto_library(
 )
 
 grpc_upb_proto_library(
+    name = "envoy_config_accesslog_upb",
+    deps = ["@envoy_api//envoy/config/accesslog/v3:pkg"],
+)
+
+grpc_upb_proto_library(
     name = "envoy_config_cluster_upb",
     deps = ["@envoy_api//envoy/config/cluster/v3:pkg"],
 )
@@ -5371,6 +5376,11 @@ grpc_upb_proto_library(
 grpc_upb_proto_reflection_library(
     name = "envoy_extensions_access_loggers_open_telemetry_upbdefs",
     deps = ["@envoy_api//envoy/extensions/access_loggers/open_telemetry/v3:pkg"],
+)
+
+grpc_upb_proto_library(
+    name = "envoy_extensions_access_loggers_grpc_upb",
+    deps = ["@envoy_api//envoy/extensions/access_loggers/grpc/v3:pkg"],
 )
 
 grpc_upb_proto_library(
@@ -5731,6 +5741,11 @@ grpc_upb_proto_library(
 grpc_upb_proto_reflection_library(
     name = "autosharding_upbdefs",
     deps = ["@autosharding//:autosharding_proto"],
+)
+
+grpc_upb_proto_library(
+    name = "opentelemetry_proto_common_upb",
+    deps = ["@opentelemetry-proto//:common_proto"],
 )
 
 WELL_KNOWN_PROTO_TARGETS = [

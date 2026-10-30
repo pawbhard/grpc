@@ -166,13 +166,17 @@ class XdsRouting final {
     // The add_last_filter() callback is called on the builder after
     // adding all of the xDS HTTP filters and right before building the
     // filter chain.  May be null if not needed.
+    //
+    // If access_log_config is not null, the access log filter is added as
+    // the first filter of each chain.
     RouteConfigFilterChainBuilder(
         const std::vector<
             XdsListenerResource::HttpConnectionManager::HttpFilter>&
             hcm_filter_configs,
         const XdsHttpFilterRegistry& http_filter_registry,
         XdsFilterChainBuilder& builder, XdsTransportFactory& transport_factory,
-        Blackboard& blackboard);
+        Blackboard& blackboard,
+        RefCountedPtr<const FilterConfig> access_log_config = nullptr);
 
     // Returns a filter chain builder for a given virtual host.
     VirtualHostFilterChainBuilder MakeVirtualHostFilterChainBuilder(
@@ -183,7 +187,8 @@ class XdsRouting final {
    private:
     absl::StatusOr<RefCountedPtr<const FilterChain>> GetDefaultFilterChain();
 
-    const std::vector<XdsListenerResource::HttpConnectionManager::HttpFilter>&
+    // The HCM filters, with the access log filter (if any) first.
+    std::vector<XdsListenerResource::HttpConnectionManager::HttpFilter>
         hcm_filter_configs_;
     XdsFilterChainBuilder& builder_;
     Blackboard& blackboard_;

@@ -47,6 +47,7 @@
 #include "src/core/util/string.h"
 #include "src/core/util/upb_utils.h"
 #include "src/core/util/validation_errors.h"
+#include "src/core/xds/grpc/xds_access_log.h"
 #include "src/core/xds/grpc/xds_common_types.h"
 #include "src/core/xds/grpc/xds_common_types_parser.h"
 #include "src/core/xds/grpc/xds_route_config_parser.h"
@@ -342,6 +343,16 @@ XdsListenerResource::HttpConnectionManager HttpConnectionManagerParse(
         }
       }
     }
+  }
+  // access_log
+  {
+    size_t num_access_logs;
+    const auto* access_logs =
+        envoy_extensions_filters_network_http_connection_manager_v3_HttpConnectionManager_access_log(
+            http_connection_manager_proto, &num_access_logs);
+    ValidationErrors::ScopedField field(errors, ".access_log");
+    http_connection_manager.access_log_config = ParseXdsAccessLogs(
+        is_client, context, access_logs, num_access_logs, errors);
   }
   // Found inlined route_config. Parse it to find the cluster_name.
   if (envoy_extensions_filters_network_http_connection_manager_v3_HttpConnectionManager_has_route_config(

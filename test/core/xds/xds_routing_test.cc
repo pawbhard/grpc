@@ -23,16 +23,21 @@
 #include <string>
 
 #include "src/core/call/metadata_batch.h"
+#include "src/core/filter/access_log/access_log_filter.h"
+#include "src/core/filter/access_log/otel_access_log_sink.h"
 #include "src/core/filter/filter_chain.h"
 #include "src/core/lib/channel/channel_args.h"
 #include "src/core/lib/channel/channel_stack.h"
 #include "src/core/lib/channel/promise_based_filter.h"
 #include "src/core/lib/slice/slice.h"
+#include "src/core/util/down_cast.h"
 #include "src/core/util/unique_type_name.h"
 #include "src/core/xds/grpc/blackboard.h"
+#include "src/core/xds/grpc/xds_access_log.h"
 #include "src/core/xds/grpc/xds_http_filter_registry.h"
 #include "src/core/xds/grpc/xds_listener.h"
 #include "src/core/xds/grpc/xds_route_config.h"
+#include "test/core/event_engine/fuzzing_event_engine/fuzzing_event_engine.h"
 #include "test/core/test_util/test_config.h"
 #include "test/core/xds/xds_transport_fake.h"
 #include "gmock/gmock.h"
@@ -771,6 +776,189 @@ TEST(XdsRoutingGetHeaderValueTest, AuthorityHeaderNamesAreCaseInsensitive) {
             "authority");
   EXPECT_EQ(XdsRouting::GetHeaderValue(&md, ":AUTHORITY", &buffer),
             "authority");
+}
+
+//
+// Access log filter injection
+//
+
+class NoopAccessLogSink final : public AccessLogSink {
+ public:
+  void Log(AccessLogRecord /*record*/) override {}
+};
+
+class CountingSinkFactory final : public OtelAccessLogSinkFactory {
+ public:
+  std::unique_ptr<AccessLogSink> CreateSink(
+      OtelAccessLogSinkArgs args) override {
+    ++num_sinks_created;
+    last_log_name = args.log_name;
+    EXPECT_NE(args.transport, nullptr);
+    return std::make_unique<NoopAccessLogSink>();
+  }
+
+  int num_sinks_created = 0;
+  std::string last_log_name;
+};
+
+class XdsAccessLogInjectionTest : public XdsRouteConfigFilterChainBuilderTest {
+ protected:
+  void SetUp() override {
+    XdsRouteConfigFilterChainBuilderTest::SetUp();
+    // The fake transport needs an EventEngine when it is orphaned.
+    event_engine_ =
+        std::make_shared<grpc_event_engine::experimental::FuzzingEventEngine>(
+            grpc_event_engine::experimental::FuzzingEventEngine::Options(),
+            fuzzing_event_engine::Actions());
+    transport_factory_ =
+        MakeRefCounted<FakeXdsTransportFactory>([]() {}, event_engine_);
+    sink_factory_ = std::make_shared<CountingSinkFactory>();
+    SetOtelAccessLogSinkFactory(sink_factory_);
+  }
+
+  void TearDown() override {
+    SetOtelAccessLogSinkFactory(nullptr);
+    blackboard_.reset();
+    transport_factory_.reset();
+    event_engine_->TickUntilIdle();
+    event_engine_->UnsetGlobalHooks();
+  }
+
+  std::shared_ptr<grpc_event_engine::experimental::FuzzingEventEngine>
+      event_engine_;
+
+  static RefCountedPtr<const FilterConfig> MakeAccessLogConfig() {
+    auto config = MakeRefCounted<XdsAccessLogConfig>();
+    XdsOtelAccessLoggerConfig logger;
+    logger.collector = std::make_shared<const GrpcXdsServerTarget>(
+        "dns:collector.example.com", /*channel_creds_config=*/nullptr,
+        std::vector<RefCountedPtr<const CallCredsConfig>>());
+    logger.log_name = "access";
+    config->loggers.push_back(std::move(logger));
+    return config;
+  }
+
+  std::shared_ptr<CountingSinkFactory> sink_factory_;
+};
+
+MATCHER(IsAccessLogFilter, "") {
+  if (arg.first != XdsAccessLogFilterFactory::Get()) {
+    *result_listener << "not the access log filter factory";
+    return false;
+  }
+  if (arg.second == nullptr ||
+      arg.second->type() != AccessLogFilter::Config::Type()) {
+    *result_listener << "wrong config type";
+    return false;
+  }
+  const auto& config = DownCast<const AccessLogFilter::Config&>(*arg.second);
+  if (config.loggers.size() != 1 || config.loggers[0].sink == nullptr) {
+    *result_listener << "expected one logger with a sink";
+    return false;
+  }
+  return true;
+}
+
+TEST_F(XdsAccessLogInjectionTest, AccessLogFilterIsFirst) {
+  std::vector<XdsListenerResource::HttpConnectionManager::HttpFilter>
+      hcm_filters = {MakeHcmFilter("filter1", "hcm")};
+  XdsRouting::RouteConfigFilterChainBuilder route_config_builder(
+      hcm_filters, registry_, builder_, *transport_factory_, *blackboard_,
+      MakeAccessLogConfig());
+  auto vhost = MakeVirtualHost();
+  auto vhost_builder =
+      route_config_builder.MakeVirtualHostFilterChainBuilder(vhost);
+  auto route = MakeRoute();
+  auto filter_chain = vhost_builder.BuildFilterChainForRoute(route);
+  EXPECT_THAT(filter_chain, IsFilterChain(::testing::ElementsAre(
+                                IsAccessLogFilter(),
+                                IsFilterAndConfig(GetTestXdsHttpFilterFactory(),
+                                                  "hcm/blackboard{hcm}"))));
+  EXPECT_EQ(sink_factory_->num_sinks_created, 1);
+  EXPECT_EQ(sink_factory_->last_log_name, "access");
+}
+
+TEST_F(XdsAccessLogInjectionTest, SinkSharedAcrossChains) {
+  std::vector<XdsListenerResource::HttpConnectionManager::HttpFilter>
+      hcm_filters = {MakeHcmFilter("filter1", "hcm")};
+  XdsRouting::RouteConfigFilterChainBuilder route_config_builder(
+      hcm_filters, registry_, builder_, *transport_factory_, *blackboard_,
+      MakeAccessLogConfig());
+  auto vhost = MakeVirtualHost();
+  auto vhost_builder =
+      route_config_builder.MakeVirtualHostFilterChainBuilder(vhost);
+  // Routes with overrides get their own chains.
+  auto route1 = MakeRoute({{"filter1", MakeOverride("route1")}});
+  auto route2 = MakeRoute({{"filter1", MakeOverride("route2")}});
+  auto chain1 = vhost_builder.BuildFilterChainForRoute(route1);
+  auto chain2 = vhost_builder.BuildFilterChainForRoute(route2);
+  ASSERT_TRUE(chain1.ok());
+  ASSERT_TRUE(chain2.ok());
+  const auto& filters1 = DownCast<const FakeFilterChain&>(**chain1).filters;
+  const auto& filters2 = DownCast<const FakeFilterChain&>(**chain2).filters;
+  ASSERT_EQ(filters1.size(), 2u);
+  ASSERT_EQ(filters2.size(), 2u);
+  const auto& config1 =
+      DownCast<const AccessLogFilter::Config&>(*filters1[0].second);
+  const auto& config2 =
+      DownCast<const AccessLogFilter::Config&>(*filters2[0].second);
+  EXPECT_EQ(config1.loggers[0].sink, config2.loggers[0].sink);
+  EXPECT_EQ(sink_factory_->num_sinks_created, 1);
+}
+
+TEST_F(XdsAccessLogInjectionTest, NoSinkFactoryGivesEmptyLoggerList) {
+  SetOtelAccessLogSinkFactory(nullptr);
+  std::vector<XdsListenerResource::HttpConnectionManager::HttpFilter>
+      hcm_filters = {MakeHcmFilter("filter1", "hcm")};
+  XdsRouting::RouteConfigFilterChainBuilder route_config_builder(
+      hcm_filters, registry_, builder_, *transport_factory_, *blackboard_,
+      MakeAccessLogConfig());
+  auto vhost = MakeVirtualHost();
+  auto vhost_builder =
+      route_config_builder.MakeVirtualHostFilterChainBuilder(vhost);
+  auto route = MakeRoute();
+  auto filter_chain = vhost_builder.BuildFilterChainForRoute(route);
+  ASSERT_TRUE(filter_chain.ok());
+  const auto& filters =
+      DownCast<const FakeFilterChain&>(**filter_chain).filters;
+  ASSERT_EQ(filters.size(), 2u);
+  EXPECT_EQ(filters[0].first, XdsAccessLogFilterFactory::Get());
+  EXPECT_TRUE(DownCast<const AccessLogFilter::Config&>(*filters[0].second)
+                  .loggers.empty());
+}
+
+// Breaks the XdsTransportFactory contract on purpose, to check that the
+// access log code does not create a sink with a null transport.
+class NullXdsTransportFactory final : public XdsTransportFactory {
+ public:
+  RefCountedPtr<XdsTransport> GetTransport(
+      const XdsBootstrap::XdsServerTarget& /*server*/,
+      absl::Status* status) override {
+    *status = absl::UnavailableError("no transport");
+    return nullptr;
+  }
+  void Orphaned() override {}
+};
+
+TEST_F(XdsAccessLogInjectionTest, NullTransportDropsLogger) {
+  auto null_transport_factory = MakeRefCounted<NullXdsTransportFactory>();
+  std::vector<XdsListenerResource::HttpConnectionManager::HttpFilter>
+      hcm_filters = {MakeHcmFilter("filter1", "hcm")};
+  XdsRouting::RouteConfigFilterChainBuilder route_config_builder(
+      hcm_filters, registry_, builder_, *null_transport_factory, *blackboard_,
+      MakeAccessLogConfig());
+  auto vhost = MakeVirtualHost();
+  auto vhost_builder =
+      route_config_builder.MakeVirtualHostFilterChainBuilder(vhost);
+  auto route = MakeRoute();
+  auto filter_chain = vhost_builder.BuildFilterChainForRoute(route);
+  ASSERT_TRUE(filter_chain.ok());
+  const auto& filters =
+      DownCast<const FakeFilterChain&>(**filter_chain).filters;
+  ASSERT_EQ(filters.size(), 2u);
+  EXPECT_TRUE(DownCast<const AccessLogFilter::Config&>(*filters[0].second)
+                  .loggers.empty());
+  EXPECT_EQ(sink_factory_->num_sinks_created, 0);
 }
 
 }  // namespace
