@@ -22,14 +22,18 @@
 #include <utility>
 #include <vector>
 
+#include "envoy/config/rbac/v3/rbac.pb.h"
 #include "envoy/extensions/access_loggers/open_telemetry/v3/logs_service.pb.h"
 #include "envoy/extensions/filters/http/ext_proc/v3/ext_proc.pb.h"
+#include "envoy/extensions/filters/http/rbac/v3/rbac.pb.h"
 #include "envoy/extensions/filters/network/http_connection_manager/v3/http_connection_manager.pb.h"
 #include "envoy/extensions/grpc_service/channel_credentials/insecure/v3/insecure_credentials.pb.h"
 #include "envoy/service/ext_proc/v3/external_processor.grpc.pb.h"
 #include "opentelemetry/proto/collector/logs/v1/logs_service.pb.h"
 #include "src/core/config/config_vars.h"
 #include "src/core/util/sync.h"
+#include "src/proto/grpc/testing/echo.grpc.pb.h"
+#include "src/proto/grpc/testing/echo_messages.pb.h"
 #include "test/core/test_util/scoped_env_var.h"
 #include "test/core/test_util/test_config.h"
 #include "test/cpp/end2end/end2end_test_utils.h"
@@ -45,6 +49,8 @@ namespace grpc {
 namespace testing {
 namespace {
 
+using ::envoy::config::rbac::v3::Policy;
+using ::envoy::config::rbac::v3::RBAC_Action_DENY;
 using ::envoy::extensions::access_loggers::open_telemetry::v3::
     OpenTelemetryAccessLogConfig;
 using ::envoy::extensions::filters::http::ext_proc::v3::ExternalProcessor;
@@ -300,9 +306,11 @@ class XdsOtelAccessLogEnd2endTest : public XdsEnd2endTest {
 
   // If ext_proc is not null, an ext_proc filter is added before the router.
   // If route_config is not null, it replaces the default route config.
+  // If extra_filter is not null, it is added before the router.
   void SetAccessLogConfig(const OpenTelemetryAccessLogConfig& config,
                           const ExternalProcessor* ext_proc = nullptr,
-                          const RouteConfiguration* route_config = nullptr) {
+                          const RouteConfiguration* route_config = nullptr,
+                          const HttpFilter* extra_filter = nullptr) {
     Listener listener = GetParam().filter_on_server() ? default_server_listener_
                                                       : default_listener_;
     std::unique_ptr<HcmAccessor> hcm_accessor;
@@ -317,6 +325,13 @@ class XdsOtelAccessLogEnd2endTest : public XdsEnd2endTest {
       *hcm.add_http_filters() = *filter0;
       filter0->set_name("ext_proc");
       filter0->mutable_typed_config()->PackFrom(*ext_proc);
+    }
+    if (extra_filter != nullptr) {
+      // The router is the last filter.  Put extra_filter in its place, then
+      // add the router again after it.
+      HttpFilter router = hcm.http_filters(hcm.http_filters_size() - 1);
+      *hcm.mutable_http_filters(hcm.http_filters_size() - 1) = *extra_filter;
+      *hcm.add_http_filters() = std::move(router);
     }
     auto* access_log = hcm.add_access_log();
     access_log->set_name("envoy.access_loggers.open_telemetry");
@@ -458,6 +473,76 @@ TEST_P(XdsOtelAccessLogEnd2endTest, RecordShowsRequestHeadersAfterExtProc) {
       collector_->service()->WaitForLogRecords(1, absl::Seconds(10));
   ASSERT_EQ(log_records.size(), 1u);
   EXPECT_EQ(log_records[0].body().string_value(), "bob yes -");
+}
+
+// The default route matches every path, so an RPC for a service that the
+// backend does not implement passes routing and the xDS filters.  The
+// backend fails it with UNIMPLEMENTED.  The access log writes one record
+// with that status.
+TEST_P(XdsOtelAccessLogEnd2endTest, UnimplementedMethodIsLogged) {
+  SetAccessLogConfig(MakeAccessLogConfig());
+  StartBackendServer();
+  CheckRpcSendOk(DEBUG_LOCATION);
+  std::unique_ptr<UnimplementedEchoService::Stub> stub =
+      UnimplementedEchoService::NewStub(channel_);
+  ClientContext context;
+  context.set_deadline(grpc_timeout_milliseconds_to_deadline(5000));
+  EchoRequest request;
+  request.set_message("hello");
+  EchoResponse response;
+  Status status = stub->Unimplemented(&context, request, &response);
+  EXPECT_EQ(status.error_code(), StatusCode::UNIMPLEMENTED)
+      << status.error_message();
+  std::vector<LogRecord> log_records =
+      collector_->service()->WaitForLogRecords(2, absl::Seconds(10));
+  ASSERT_EQ(log_records.size(), 2u);
+  EXPECT_THAT(log_records,
+              ::testing::Contains(::testing::Truly([](const LogRecord& r) {
+                return r.body().string_value() ==
+                           "/grpc.testing.UnimplementedEchoService/"
+                           "Unimplemented Unimplemented" &&
+                       GetStringAttribute(r, "status") == "12";
+              })));
+  // No extra records arrive.
+  absl::SleepFor(absl::Milliseconds(300) * grpc_test_slowdown_factor());
+  EXPECT_EQ(
+      collector_->service()->WaitForLogRecords(2, absl::ZeroDuration()).size(),
+      2u);
+}
+
+// RBAC is a later filter than the access log filter.  When RBAC denies the
+// RPC, the access log filter still sees the final status and writes one
+// record.  RBAC runs only on the server.
+TEST_P(XdsOtelAccessLogEnd2endTest, RbacDenialIsLogged) {
+  if (!GetParam().filter_on_server()) {
+    GTEST_SKIP() << "RBAC is a server-side filter";
+  }
+  ::envoy::extensions::filters::http::rbac::v3::RBAC rbac;
+  auto* rules = rbac.mutable_rules();
+  rules->set_action(RBAC_Action_DENY);
+  Policy policy;
+  policy.add_permissions()->set_any(true);
+  policy.add_principals()->set_any(true);
+  (*rules->mutable_policies())["deny-all"] = policy;
+  HttpFilter rbac_filter;
+  rbac_filter.set_name("envoy.filters.http.rbac");
+  rbac_filter.mutable_typed_config()->PackFrom(rbac);
+  SetAccessLogConfig(MakeAccessLogConfig(), /*ext_proc=*/nullptr,
+                     /*route_config=*/nullptr, &rbac_filter);
+  StartBackendServer();
+  CheckRpcSendFailure(DEBUG_LOCATION, StatusCode::PERMISSION_DENIED, ".*",
+                      RpcOptions().set_wait_for_ready(true));
+  std::vector<LogRecord> log_records =
+      collector_->service()->WaitForLogRecords(1, absl::Seconds(10));
+  ASSERT_EQ(log_records.size(), 1u);
+  EXPECT_EQ(log_records[0].body().string_value(),
+            "/grpc.testing.EchoTestService/Echo PermissionDenied");
+  EXPECT_EQ(GetStringAttribute(log_records[0], "status"), "7");
+  // No extra records arrive.
+  absl::SleepFor(absl::Milliseconds(300) * grpc_test_slowdown_factor());
+  EXPECT_EQ(
+      collector_->service()->WaitForLogRecords(1, absl::ZeroDuration()).size(),
+      1u);
 }
 
 }  // namespace
