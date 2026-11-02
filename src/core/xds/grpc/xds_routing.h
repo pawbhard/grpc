@@ -168,7 +168,9 @@ class XdsRouting final {
     // filter chain.  May be null if not needed.
     //
     // If access_log_config is not null, the access log filter is added as
-    // the first filter of each chain.
+    // the first filter of each chain.  If its templates also read request
+    // headers, the access log request header filter is added as the last
+    // filter before the terminal filter.
     RouteConfigFilterChainBuilder(
         const std::vector<
             XdsListenerResource::HttpConnectionManager::HttpFilter>&
@@ -187,7 +189,8 @@ class XdsRouting final {
    private:
     absl::StatusOr<RefCountedPtr<const FilterChain>> GetDefaultFilterChain();
 
-    // The HCM filters, with the access log filter (if any) first.
+    // The HCM filters, with the access log filter (if any) first and the
+    // access log request header filter (if any) before the terminal filter.
     std::vector<XdsListenerResource::HttpConnectionManager::HttpFilter>
         hcm_filter_configs_;
     XdsFilterChainBuilder& builder_;

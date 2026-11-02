@@ -185,6 +185,12 @@ void AccessLogFilter::Call::OnClientInitialMetadata(ClientMetadata& md,
   data_.start_time = absl::Now();
   const Config& config = filter->config();
   CaptureHeaders(md, config.header_names.request, &data_.request_headers);
+  // Later filters can change the request headers.  If the chain has an
+  // AccessLogRequestHeaderFilter, it captures them again through this
+  // context.
+  if (!config.header_names.request.empty()) {
+    SetContext<AccessLogCallContext>(&context_);
+  }
   if (!config.is_client) {
     const Slice* peer = md.get_pointer(PeerString());
     if (peer != nullptr) {
@@ -259,6 +265,52 @@ void AccessLogFilter::Call::MaybeLog(const Config& config,
     }
     logger.sink->sink()->Log(std::move(record));
   }
+}
+
+//
+// AccessLogRequestHeaderFilter
+//
+
+bool AccessLogRequestHeaderFilter::Config::Equals(
+    const FilterConfig& other) const {
+  const auto& o = DownCast<const Config&>(other);
+  return request_header_names == o.request_header_names;
+}
+
+std::string AccessLogRequestHeaderFilter::Config::ToString() const {
+  return absl::StrCat("{request_header_names=[",
+                      absl::StrJoin(request_header_names, ", "), "]}");
+}
+
+const grpc_channel_filter AccessLogRequestHeaderFilter::kFilterVtable =
+    MakePromiseBasedFilter<AccessLogRequestHeaderFilter,
+                           FilterEndpoint::kClient>();
+
+absl::StatusOr<std::unique_ptr<AccessLogRequestHeaderFilter>>
+AccessLogRequestHeaderFilter::Create(const ChannelArgs& /*args*/,
+                                     ChannelFilter::Args filter_args) {
+  if (filter_args.config() == nullptr) {
+    return absl::InternalError(
+        "access_log_request_header: filter config not set");
+  }
+  if (filter_args.config()->type() != Config::Type()) {
+    return absl::InternalError(absl::StrCat(
+        "wrong config type passed to access log request header filter: ",
+        filter_args.config()->type().name()));
+  }
+  return std::make_unique<AccessLogRequestHeaderFilter>(
+      filter_args.config().TakeAsSubclass<const Config>());
+}
+
+void AccessLogRequestHeaderFilter::Call::OnClientInitialMetadata(
+    ClientMetadata& md, AccessLogRequestHeaderFilter* filter) {
+  AccessLogCallContext* context = MaybeGetContext<AccessLogCallContext>();
+  if (context == nullptr || context->request_headers == nullptr) return;
+  // Replace the copy that AccessLogFilter made, so that the record also
+  // shows headers that earlier filters removed.
+  context->request_headers->clear();
+  CaptureHeaders(md, filter->config_->request_header_names,
+                 context->request_headers);
 }
 
 }  // namespace grpc_core

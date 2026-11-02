@@ -38,6 +38,7 @@ See also: [gRPC Core overview](../AGENTS.md)
 *   **`filter_chain.h`**: Defines `FilterChain` and `FilterChainBuilder`.
 *   **`fused_filters.cc`**: Defines and registers fused filter combinations via `RegisterFusedFilters`.
 *   **`access_log/`**: Implements `AccessLogFilter`, which writes one access log record per RPC for each configured logger (`access_log_filter.{h,cc}`).
+    *   `AccessLogRequestHeaderFilter` (`access_log_filter.{h,cc}`) runs last in the xDS chain. It captures the request headers again after other filters (for example, ext_authz and ext_proc) changed them. It writes them through the `AccessLogCallContext` arena context.
     *   `access_log_formatter.{h,cc}`: `AccessLogFormatter` evaluates Envoy-style substitution templates (for example, `%REQ(:path)%`).
     *   `access_log_sink.h`: `AccessLogSink` receives the records.
     *   `otel_access_log_sink.{h,cc}`: `OtelAccessLogSinkFactory` registry; the OpenTelemetry plugin (`src/cpp/ext/otel/otel_access_log.cc`) registers the implementation.

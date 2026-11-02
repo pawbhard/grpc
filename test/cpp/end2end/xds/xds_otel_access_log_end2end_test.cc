@@ -23,17 +23,21 @@
 #include <vector>
 
 #include "envoy/extensions/access_loggers/open_telemetry/v3/logs_service.pb.h"
+#include "envoy/extensions/filters/http/ext_proc/v3/ext_proc.pb.h"
 #include "envoy/extensions/filters/network/http_connection_manager/v3/http_connection_manager.pb.h"
 #include "envoy/extensions/grpc_service/channel_credentials/insecure/v3/insecure_credentials.pb.h"
+#include "envoy/service/ext_proc/v3/external_processor.grpc.pb.h"
 #include "opentelemetry/proto/collector/logs/v1/logs_service.pb.h"
 #include "src/core/config/config_vars.h"
 #include "src/core/util/sync.h"
 #include "test/core/test_util/scoped_env_var.h"
 #include "test/core/test_util/test_config.h"
+#include "test/cpp/end2end/end2end_test_utils.h"
 #include "test/cpp/end2end/xds/xds_end2end_test_lib.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
 #include "absl/time/clock.h"
 #include "absl/time/time.h"
 
@@ -43,6 +47,12 @@ namespace {
 
 using ::envoy::extensions::access_loggers::open_telemetry::v3::
     OpenTelemetryAccessLogConfig;
+using ::envoy::extensions::filters::http::ext_proc::v3::ExternalProcessor;
+using ::envoy::extensions::filters::http::ext_proc::v3::ProcessingMode;
+using ::envoy::extensions::filters::network::http_connection_manager::v3::
+    HttpFilter;
+using ::envoy::service::ext_proc::v3::ProcessingRequest;
+using ::envoy::service::ext_proc::v3::ProcessingResponse;
 using ::opentelemetry::proto::collector::logs::v1::ExportLogsServiceRequest;
 using ::opentelemetry::proto::logs::v1::LogRecord;
 
@@ -149,6 +159,39 @@ std::string GetStringAttribute(const LogRecord& log_record,
   return "<missing>";
 }
 
+// A fake external processor.  For each request headers message, it
+// overwrites x-user with "bob", adds x-added: yes, and removes x-remove.
+class HeaderChangingExtProcService final
+    : public ::envoy::service::ext_proc::v3::ExternalProcessor::Service {
+ public:
+  Status Process(ServerContext* /*context*/,
+                 ServerReaderWriter<ProcessingResponse, ProcessingRequest>*
+                     stream) override {
+    ProcessingRequest request;
+    while (stream->Read(&request)) {
+      if (!request.has_request_headers()) continue;
+      ProcessingResponse response;
+      auto* mutation = response.mutable_request_headers()
+                           ->mutable_response()
+                           ->mutable_header_mutation();
+      auto add_header = [mutation](absl::string_view key,
+                                   absl::string_view value) {
+        auto* option = mutation->add_set_headers();
+        // The default action appends to an existing value.
+        option->set_append_action(::envoy::config::core::v3::HeaderValueOption::
+                                      OVERWRITE_IF_EXISTS_OR_ADD);
+        option->mutable_header()->set_key(key);
+        option->mutable_header()->set_raw_value(value);
+      };
+      add_header("x-user", "bob");
+      add_header("x-added", "yes");
+      mutation->add_remove_headers("x-remove");
+      if (!stream->Write(response)) break;
+    }
+    return Status::OK;
+  }
+};
+
 class XdsOtelAccessLogEnd2endTest : public XdsEnd2endTest {
  protected:
   class CollectorServerThread final : public ServerThread {
@@ -171,8 +214,30 @@ class XdsOtelAccessLogEnd2endTest : public XdsEnd2endTest {
     std::unique_ptr<FakeOtlpCollectorService> service_;
   };
 
+  class ExtProcServerThread final : public ServerThread {
+   public:
+    explicit ExtProcServerThread(XdsEnd2endTest* test_obj)
+        : ServerThread(test_obj, /*use_xds_enabled_server=*/false,
+                       InsecureServerCredentials()) {}
+
+   private:
+    const char* Type() override { return "ExtProc"; }
+    void RegisterAllServices(ServerBuilder* builder) override {
+      builder->RegisterService(&service_);
+    }
+    void StartAllServices() override {}
+    void ShutdownAllServices() override {}
+
+    HeaderChangingExtProcService service_;
+  };
+
   void SetUp() override {
     env_var_.emplace("GRPC_EXPERIMENTAL_XDS_OTEL_ACCESS_LOG");
+    // The xDS HTTP filter registry is built with the bootstrap, so the
+    // ext_proc filter must be enabled before InitClient().
+    ext_proc_env_var_.emplace(GetParam().filter_on_server()
+                                  ? "GRPC_EXPERIMENTAL_XDS_EXT_PROC_ON_SERVER"
+                                  : "GRPC_EXPERIMENTAL_XDS_EXT_PROC_ON_CLIENT");
     experimental::EnableOpenTelemetryXdsAccessLogging();
     InitClient(MakeBootstrapBuilder().SetTrustedXdsServer(),
                /*lb_expected_authority=*/"",
@@ -189,6 +254,7 @@ class XdsOtelAccessLogEnd2endTest : public XdsEnd2endTest {
   }
 
   void TearDown() override {
+    if (ext_proc_server_ != nullptr) ext_proc_server_->Shutdown();
     if (collector_ != nullptr) collector_->Shutdown();
     XdsEnd2endTest::TearDown();
   }
@@ -212,7 +278,29 @@ class XdsOtelAccessLogEnd2endTest : public XdsEnd2endTest {
     return config;
   }
 
-  void SetAccessLogConfig(const OpenTelemetryAccessLogConfig& config) {
+  // Starts the fake external processor and returns an ext_proc filter
+  // config that sends only the request headers to it.
+  ExternalProcessor StartExtProcServer() {
+    ext_proc_server_ = std::make_unique<ExtProcServerThread>(this);
+    ext_proc_server_->Start();
+    ExternalProcessor ext_proc;
+    auto* google_grpc = ext_proc.mutable_grpc_service()->mutable_google_grpc();
+    google_grpc->set_target_uri(ext_proc_server_->target());
+    google_grpc->add_channel_credentials_plugin()->PackFrom(
+        envoy::extensions::grpc_service::channel_credentials::insecure::v3::
+            InsecureCredentials());
+    auto* mode = ext_proc.mutable_processing_mode();
+    mode->set_request_header_mode(ProcessingMode::SEND);
+    mode->set_response_header_mode(ProcessingMode::SKIP);
+    mode->set_response_trailer_mode(ProcessingMode::SKIP);
+    mode->set_request_body_mode(ProcessingMode::NONE);
+    mode->set_response_body_mode(ProcessingMode::NONE);
+    return ext_proc;
+  }
+
+  // If ext_proc is not null, an ext_proc filter is added before the router.
+  void SetAccessLogConfig(const OpenTelemetryAccessLogConfig& config,
+                          const ExternalProcessor* ext_proc = nullptr) {
     Listener listener = GetParam().filter_on_server() ? default_server_listener_
                                                       : default_listener_;
     std::unique_ptr<HcmAccessor> hcm_accessor;
@@ -222,6 +310,12 @@ class XdsOtelAccessLogEnd2endTest : public XdsEnd2endTest {
       hcm_accessor = std::make_unique<ClientHcmAccessor>();
     }
     HttpConnectionManager hcm = hcm_accessor->Unpack(listener);
+    if (ext_proc != nullptr) {
+      HttpFilter* filter0 = hcm.mutable_http_filters(0);
+      *hcm.add_http_filters() = *filter0;
+      filter0->set_name("ext_proc");
+      filter0->mutable_typed_config()->PackFrom(*ext_proc);
+    }
     auto* access_log = hcm.add_access_log();
     access_log->set_name("envoy.access_loggers.open_telemetry");
     access_log->mutable_typed_config()->PackFrom(config);
@@ -245,7 +339,9 @@ class XdsOtelAccessLogEnd2endTest : public XdsEnd2endTest {
   }
 
   std::optional<grpc_core::testing::ScopedExperimentalEnvVar> env_var_;
+  std::optional<grpc_core::testing::ScopedExperimentalEnvVar> ext_proc_env_var_;
   std::unique_ptr<CollectorServerThread> collector_;
+  std::unique_ptr<ExtProcServerThread> ext_proc_server_;
 };
 
 INSTANTIATE_TEST_SUITE_P(
@@ -299,6 +395,29 @@ TEST_P(XdsOtelAccessLogEnd2endTest, FailedRpcIsLogged) {
                 return r.body().string_value() ==
                        "/grpc.testing.EchoTestService/Echo FailedPrecondition";
               })));
+}
+
+// ext_proc changes the request headers.  The access log filter is first in
+// the chain, so it sees the headers before ext_proc runs.  The request
+// header filter before the router captures them again, so the record shows
+// the changed headers, as Envoy does.
+TEST_P(XdsOtelAccessLogEnd2endTest, RecordShowsRequestHeadersAfterExtProc) {
+  if (GetParam().filter_on_server()) {
+    SKIP_TEST_FOR_PH2_SERVER("ext_proc is not yet supported with PH2");
+  }
+  OpenTelemetryAccessLogConfig config = MakeAccessLogConfig();
+  config.mutable_body()->set_string_value(
+      "%REQ(x-user)% %REQ(x-added)% %REQ(x-remove)%");
+  ExternalProcessor ext_proc = StartExtProcServer();
+  SetAccessLogConfig(config, &ext_proc);
+  StartBackendServer();
+  CheckRpcSendOk(
+      DEBUG_LOCATION, 1,
+      RpcOptions().set_metadata({{"x-user", "alice"}, {"x-remove", "gone"}}));
+  std::vector<LogRecord> log_records =
+      collector_->service()->WaitForLogRecords(1, absl::Seconds(10));
+  ASSERT_EQ(log_records.size(), 1u);
+  EXPECT_EQ(log_records[0].body().string_value(), "bob yes -");
 }
 
 }  // namespace

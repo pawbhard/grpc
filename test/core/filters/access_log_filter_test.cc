@@ -193,5 +193,108 @@ TEST_F(AccessLogFilterTest, ConfigEquality) {
                                                   "%GRPC_STATUS%\"}"));
 }
 
+// A later filter (AccessLogRequestHeaderFilter) replaces the request
+// headers through the arena context.  The record uses the new headers.
+TEST_F(AccessLogFilterTest, RecordUsesRequestHeadersFromCallContext) {
+  {
+    Call call(
+        MakeChannel(ChannelArgs(), MakeConfig(/*is_client=*/false)).value());
+    EXPECT_EVENT(Started(&call, _));
+    call.Start(call.NewClientMetadata(
+        {{":path", "/pkg.Svc/Method"}, {"user-agent", "original"}}));
+    Step();
+    AccessLogCallContext* context =
+        call.arena()->GetContext<AccessLogCallContext>();
+    ASSERT_NE(context, nullptr);
+    ASSERT_NE(context->request_headers, nullptr);
+    EXPECT_THAT(*context->request_headers,
+                UnorderedElementsAre(Pair(":path", "/pkg.Svc/Method"),
+                                     Pair("user-agent", "original")));
+    (*context->request_headers)["user-agent"] = "changed";
+    EXPECT_EVENT(Finished(&call, _));
+    call.FinishNextFilter(call.NewServerMetadata({{"grpc-status", "0"}}));
+    Step();
+  }
+  std::vector<AccessLogRecord> records = TakeRecords();
+  ASSERT_EQ(records.size(), 1u);
+  EXPECT_THAT(records[0].attributes,
+              ::testing::Contains(Pair("ua", AccessLogValue("changed"))));
+}
+
+TEST_F(AccessLogFilterTest, NoCallContextIfNoRequestHeaderIsUsed) {
+  auto config = MakeRefCounted<AccessLogFilter::Config>();
+  AccessLogFilter::Logger logger;
+  logger.body = StringTemplate("%GRPC_STATUS%");
+  logger.sink = MakeRefCounted<AccessLogFilter::SinkHolder>(
+      std::make_unique<FakeSink>(sink_state_));
+  config->loggers.push_back(std::move(logger));
+  config->ComputeHeaderNames();
+  Call call(MakeChannel(ChannelArgs(), std::move(config)).value());
+  EXPECT_EVENT(Started(&call, _));
+  call.Start(call.NewClientMetadata({{":path", "/pkg.Svc/Method"}}));
+  Step();
+  EXPECT_EQ(call.arena()->GetContext<AccessLogCallContext>(), nullptr);
+  call.Cancel();
+}
+
+//
+// AccessLogRequestHeaderFilter
+//
+
+class AccessLogRequestHeaderFilterTest
+    : public FilterTestV2<AccessLogRequestHeaderFilter> {
+ protected:
+  static RefCountedPtr<const FilterConfig> MakeConfig() {
+    auto config = MakeRefCounted<AccessLogRequestHeaderFilter::Config>();
+    config->request_header_names = {":path", "x-added", "x-removed"};
+    return config;
+  }
+};
+
+TEST_F(AccessLogRequestHeaderFilterTest, CreateFailsWithoutConfig) {
+  auto filter = AccessLogRequestHeaderFilter::Create(ChannelArgs(),
+                                                     ChannelFilter::Args());
+  EXPECT_EQ(
+      filter.status(),
+      absl::InternalError("access_log_request_header: filter config not set"));
+}
+
+// The filter replaces the headers that AccessLogFilter captured, so that
+// added, changed, and removed headers all show in the record.
+TEST_F(AccessLogRequestHeaderFilterTest, ReplacesCapturedHeaders) {
+  AccessLogCallData::HeaderMap headers = {{":path", "/old"},
+                                          {"x-removed", "gone"}};
+  AccessLogCallContext context{&headers};
+  Call call(MakeChannel(ChannelArgs(), MakeConfig()).value());
+  call.arena()->SetContext<AccessLogCallContext>(&context);
+  EXPECT_EVENT(Started(&call, _));
+  call.Start(call.NewClientMetadata(
+      {{":path", "/pkg.Svc/Method"}, {"x-added", "v1"}, {"x-other", "v2"}}));
+  Step();
+  EXPECT_THAT(headers, UnorderedElementsAre(Pair(":path", "/pkg.Svc/Method"),
+                                            Pair("x-added", "v1")));
+  call.Cancel();
+}
+
+TEST_F(AccessLogRequestHeaderFilterTest, NoCallContextDoesNothing) {
+  Call call(MakeChannel(ChannelArgs(), MakeConfig()).value());
+  EXPECT_EVENT(Started(&call, _));
+  call.Start(call.NewClientMetadata({{":path", "/pkg.Svc/Method"}}));
+  Step();
+  EXPECT_EQ(call.arena()->GetContext<AccessLogCallContext>(), nullptr);
+  call.Cancel();
+}
+
+TEST_F(AccessLogRequestHeaderFilterTest, ConfigEqualityAndToString) {
+  auto a = MakeConfig();
+  auto b = MakeConfig();
+  EXPECT_EQ(*a, *b);
+  auto c = MakeRefCounted<AccessLogRequestHeaderFilter::Config>();
+  c->request_header_names = {":path"};
+  EXPECT_NE(*a, *c);
+  EXPECT_EQ(a->ToString(),
+            "{request_header_names=[:path, x-added, x-removed]}");
+}
+
 }  // namespace
 }  // namespace grpc_core

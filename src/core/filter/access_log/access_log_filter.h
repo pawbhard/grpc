@@ -21,6 +21,7 @@
 
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <utility>
 #include <variant>
@@ -32,6 +33,7 @@
 #include "src/core/filter/filter_args.h"
 #include "src/core/lib/channel/channel_args.h"
 #include "src/core/lib/channel/promise_based_filter.h"
+#include "src/core/lib/resource_quota/arena.h"
 #include "src/core/lib/transport/call_final_info.h"
 #include "src/core/util/ref_counted_ptr.h"
 #include "src/core/util/time.h"
@@ -54,6 +56,20 @@ AccessLogValue EvaluateAccessLogValueTemplate(
 std::string AccessLogValueTemplateToString(
     const AccessLogValueTemplate& value_template);
 
+// Per-call link from AccessLogFilter to AccessLogRequestHeaderFilter.
+// AccessLogFilter owns the object and sets it as an arena context in
+// OnClientInitialMetadata().  The object lives as long as the call.
+struct AccessLogCallContext {
+  // The request headers that the access log records use.
+  AccessLogCallData::HeaderMap* request_headers = nullptr;
+};
+
+template <>
+struct ArenaContextType<AccessLogCallContext> {
+  // AccessLogFilter::Call owns the object.
+  static void Destroy(AccessLogCallContext*) {}
+};
+
 // Writes access log records.  Writes exactly one record per RPC for each
 // configured logger.  The records are written when server trailing
 // metadata passes through the filter, or when the call is finalized,
@@ -61,6 +77,12 @@ std::string AccessLogValueTemplateToString(
 //
 // The filter is placed first in each xDS filter chain, so that it also
 // sees the status that later filters (such as RBAC) produce.
+//
+// Later filters (such as ext_authz and ext_proc) can change the request
+// headers.  The access log must show the headers after these changes, as
+// Envoy does.  So AccessLogRequestHeaderFilter, placed last in the chain,
+// captures the request headers again and replaces the first copy.  The
+// first copy stays if the call ends before it reaches the last filter.
 class AccessLogFilter final : public ImplementChannelFilter<AccessLogFilter> {
  public:
   // Shares one sink between filter chains and across config updates.
@@ -148,9 +170,63 @@ class AccessLogFilter final : public ImplementChannelFilter<AccessLogFilter> {
     uint64_t client_to_server_bytes_ = 0;
     uint64_t server_to_client_bytes_ = 0;
     AccessLogCallData data_;
+    AccessLogCallContext context_{&data_.request_headers};
   };
 
   const Config& config() const { return *config_; }
+
+ private:
+  RefCountedPtr<const Config> config_;
+};
+
+// Captures the request headers for AccessLogFilter after all other xDS
+// HTTP filters ran.  The filter is placed last in each xDS filter chain
+// that has an AccessLogFilter whose templates read request headers.
+//
+// The filter does nothing if the call has no AccessLogCallContext (for
+// example, if a route override disabled the AccessLogFilter).
+class AccessLogRequestHeaderFilter final
+    : public ImplementChannelFilter<AccessLogRequestHeaderFilter> {
+ public:
+  struct Config final : public FilterConfig {
+    static UniqueTypeName Type() {
+      return GRPC_UNIQUE_TYPE_NAME_HERE(
+          "access_log_request_header_filter_config");
+    }
+    UniqueTypeName type() const override { return Type(); }
+
+    bool Equals(const FilterConfig& other) const override;
+    std::string ToString() const override;
+
+    // The request header names that the access log templates read.
+    std::set<std::string> request_header_names;
+  };
+
+  static const grpc_channel_filter kFilterVtable;
+
+  static absl::string_view TypeName() { return "access_log_request_header"; }
+
+  static absl::StatusOr<std::unique_ptr<AccessLogRequestHeaderFilter>> Create(
+      const ChannelArgs& args, ChannelFilter::Args filter_args);
+
+  explicit AccessLogRequestHeaderFilter(RefCountedPtr<const Config> config)
+      : config_(std::move(config)) {}
+
+  class Call {
+   public:
+    void OnClientInitialMetadata(ClientMetadata& md,
+                                 AccessLogRequestHeaderFilter* filter);
+    static inline const NoInterceptor OnServerInitialMetadata;
+    static inline const NoInterceptor OnServerTrailingMetadata;
+    static inline const NoInterceptor OnClientToServerMessage;
+    static inline const NoInterceptor OnClientToServerHalfClose;
+    static inline const NoInterceptor OnServerToClientMessage;
+    static inline const NoInterceptor OnFinalize;
+
+    channelz::PropertyList ChannelzProperties() {
+      return channelz::PropertyList();
+    }
+  };
 
  private:
   RefCountedPtr<const Config> config_;

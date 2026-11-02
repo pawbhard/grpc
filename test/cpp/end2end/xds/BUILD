@@ -1019,9 +1019,13 @@ grpc_cc_test(
         "//src/core:sync",
         "//test/core/test_util:grpc_test_util",
         "//test/core/test_util:scoped_env_var",
+        "//test/cpp/end2end:end2end_test_utils",
         "@envoy_api//envoy/extensions/access_loggers/open_telemetry/v3:pkg_cc_proto",
+        "@envoy_api//envoy/extensions/filters/http/ext_proc/v3:pkg_cc_proto",
         "@envoy_api//envoy/extensions/filters/network/http_connection_manager/v3:pkg_cc_proto",
         "@envoy_api//envoy/extensions/grpc_service/channel_credentials/insecure/v3:pkg_cc_proto",
+        "@envoy_api//envoy/service/ext_proc/v3:pkg_cc_grpc",
+        "@envoy_api//envoy/service/ext_proc/v3:pkg_cc_proto",
         "@opentelemetry-proto//:logs_service_proto_cc",
     ],
 )

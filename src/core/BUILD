@@ -5937,9 +5937,11 @@ grpc_cc_library(
     ],
     deps = [
         "access_log_formatter",
+        "arena",
         "blackboard",
         "call_final_info",
         "channel_args",
+        "context",
         "default_event_engine",
         "down_cast",
         "filter_args",

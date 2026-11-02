@@ -222,8 +222,8 @@ XdsRouting::RouteConfigFilterChainBuilder::RouteConfigFilterChainBuilder(
     : builder_(builder),
       blackboard_(blackboard),
       transport_factory_(transport_factory) {
-  hcm_filter_configs_.reserve(hcm_filter_configs.size() + 1);
-  factories_.reserve(hcm_filter_configs.size() + 1);
+  hcm_filter_configs_.reserve(hcm_filter_configs.size() + 2);
+  factories_.reserve(hcm_filter_configs.size() + 2);
   // The access log filter goes first, so that it sees the final status
   // of the call, including statuses that later filters produce.
   if (access_log_config != nullptr) {
@@ -232,7 +232,7 @@ XdsRouting::RouteConfigFilterChainBuilder::RouteConfigFilterChainBuilder(
     access_log_filter.name =
         std::string(XdsAccessLogFilterFactory::kFilterName);
     access_log_filter.config_proto_type = factory->ConfigProtoName();
-    access_log_filter.filter_config = std::move(access_log_config);
+    access_log_filter.filter_config = access_log_config;
     hcm_filter_configs_.push_back(std::move(access_log_filter));
     factories_.push_back(factory);
   }
@@ -246,6 +246,26 @@ XdsRouting::RouteConfigFilterChainBuilder::RouteConfigFilterChainBuilder(
     // Add filter to list.
     hcm_filter_configs_.push_back(http_filter);
     factories_.push_back(factory);
+  }
+  // Other filters (such as ext_authz and ext_proc) can change the request
+  // headers.  The access log must show the changed headers, so a second
+  // filter captures them after all other filters.  It goes before the
+  // terminal filter (the router), which is the last entry.
+  if (access_log_config != nullptr &&
+      XdsAccessLogRequestHeaderFilterFactory::NeedsRequestHeaderFilter(
+          *access_log_config)) {
+    const XdsHttpFilterFactory* factory =
+        XdsAccessLogRequestHeaderFilterFactory::Get();
+    XdsListenerResource::HttpConnectionManager::HttpFilter header_filter;
+    header_filter.name =
+        std::string(XdsAccessLogRequestHeaderFilterFactory::kFilterName);
+    header_filter.config_proto_type = factory->ConfigProtoName();
+    header_filter.filter_config = std::move(access_log_config);
+    size_t pos = hcm_filter_configs_.size();
+    if (pos > 0 && factories_[pos - 1]->IsTerminalFilter()) --pos;
+    hcm_filter_configs_.insert(hcm_filter_configs_.begin() + pos,
+                               std::move(header_filter));
+    factories_.insert(factories_.begin() + pos, factory);
   }
 }
 

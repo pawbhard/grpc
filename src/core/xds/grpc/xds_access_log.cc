@@ -17,6 +17,7 @@
 #include "src/core/xds/grpc/xds_access_log.h"
 
 #include <memory>
+#include <set>
 #include <string>
 #include <utility>
 #include <variant>
@@ -590,6 +591,97 @@ RefCountedPtr<const FilterConfig> XdsAccessLogFilterFactory::MergeConfigs(
     config->loggers.push_back(std::move(logger));
   }
   config->ComputeHeaderNames();
+  return config;
+}
+
+//
+// XdsAccessLogRequestHeaderFilterFactory
+//
+
+namespace {
+
+// Returns the request header names that the templates in config read.
+std::set<std::string> RequestHeaderNames(const XdsAccessLogConfig& config) {
+  AccessLogHeaderNames names;
+  auto add = [&](const AccessLogValueTemplate& value_template) {
+    if (const auto* formatter =
+            std::get_if<AccessLogFormatter>(&value_template)) {
+      formatter->AddReferencedHeaders(&names);
+    }
+  };
+  for (const XdsOtelAccessLoggerConfig& logger : config.loggers) {
+    if (logger.body.has_value()) add(*logger.body);
+    for (const auto& [key, value] : logger.attributes) add(value);
+  }
+  return std::move(names.request);
+}
+
+}  // namespace
+
+const XdsAccessLogRequestHeaderFilterFactory*
+XdsAccessLogRequestHeaderFilterFactory::Get() {
+  static const XdsAccessLogRequestHeaderFilterFactory* factory =
+      new XdsAccessLogRequestHeaderFilterFactory();
+  return factory;
+}
+
+bool XdsAccessLogRequestHeaderFilterFactory::NeedsRequestHeaderFilter(
+    const FilterConfig& config) {
+  if (config.type() != XdsAccessLogConfig::Type()) return false;
+  return !RequestHeaderNames(DownCast<const XdsAccessLogConfig&>(config))
+              .empty();
+}
+
+absl::string_view XdsAccessLogRequestHeaderFilterFactory::ConfigProtoName()
+    const {
+  return kOtelAccessLogConfigType;
+}
+
+void XdsAccessLogRequestHeaderFilterFactory::AddFilter(
+    FilterChainBuilder& builder,
+    RefCountedPtr<const FilterConfig> config) const {
+  if (config == nullptr) return;
+  builder.AddFilter<AccessLogRequestHeaderFilter>(std::move(config));
+}
+
+RefCountedPtr<const FilterConfig>
+XdsAccessLogRequestHeaderFilterFactory::ParseTopLevelConfig(
+    absl::string_view /*instance_name*/,
+    const XdsResourceType::DecodeContext& /*context*/,
+    const XdsExtension& /*extension*/, ValidationErrors* errors) const {
+  errors->AddError("access loggers are not HTTP filters");
+  return nullptr;
+}
+
+RefCountedPtr<const FilterConfig>
+XdsAccessLogRequestHeaderFilterFactory::ParseOverrideConfig(
+    absl::string_view /*instance_name*/,
+    const XdsResourceType::DecodeContext& /*context*/,
+    const XdsExtension& /*extension*/, ValidationErrors* errors) const {
+  errors->AddError("access loggers do not support config overrides");
+  return nullptr;
+}
+
+RefCountedPtr<const FilterConfig>
+XdsAccessLogRequestHeaderFilterFactory::MergeConfigs(
+    RefCountedPtr<const FilterConfig> top_level_config,
+    RefCountedPtr<const FilterConfig> /*virtual_host_override_config*/,
+    RefCountedPtr<const FilterConfig> /*route_override_config*/,
+    RefCountedPtr<const FilterConfig> /*cluster_weight_override_config*/,
+    XdsTransportFactory& /*transport_factory*/,
+    Blackboard& /*blackboard*/) const {
+  if (top_level_config == nullptr ||
+      top_level_config->type() != XdsAccessLogConfig::Type()) {
+    return nullptr;
+  }
+  // No sink factory means that AccessLogFilter has no loggers and is not
+  // in the chain.  Then this filter is not needed either.
+  if (GetOtelAccessLogSinkFactory() == nullptr) return nullptr;
+  std::set<std::string> names = RequestHeaderNames(
+      DownCast<const XdsAccessLogConfig&>(*top_level_config));
+  if (names.empty()) return nullptr;
+  auto config = MakeRefCounted<AccessLogRequestHeaderFilter::Config>();
+  config->request_header_names = std::move(names);
   return config;
 }
 

@@ -961,6 +961,160 @@ TEST_F(XdsAccessLogInjectionTest, NullTransportDropsLogger) {
   EXPECT_EQ(sink_factory_->num_sinks_created, 0);
 }
 
+// A terminal filter that adds nothing to the chain, like the router.
+class TestTerminalFilterFactory final : public XdsHttpFilterFactory {
+ public:
+  static constexpr absl::string_view kConfigProtoName = "test.TerminalConfig";
+
+  absl::string_view ConfigProtoName() const override {
+    return kConfigProtoName;
+  }
+  absl::string_view OverrideConfigProtoName() const override { return ""; }
+  void PopulateSymtab(upb_DefPool* /*symtab*/) const override {}
+  void AddFilter(FilterChainBuilder& /*builder*/,
+                 RefCountedPtr<const FilterConfig> /*config*/) const override {}
+  RefCountedPtr<const FilterConfig> ParseTopLevelConfig(
+      absl::string_view /*instance_name*/,
+      const XdsResourceType::DecodeContext& /*context*/,
+      const XdsExtension& /*extension*/,
+      ValidationErrors* /*errors*/) const override {
+    return nullptr;
+  }
+  RefCountedPtr<const FilterConfig> ParseOverrideConfig(
+      absl::string_view /*instance_name*/,
+      const XdsResourceType::DecodeContext& /*context*/,
+      const XdsExtension& /*extension*/,
+      ValidationErrors* /*errors*/) const override {
+    return nullptr;
+  }
+  bool IsSupportedOnClients() const override { return true; }
+  bool IsSupportedOnServers() const override { return true; }
+  bool IsTerminalFilter() const override { return true; }
+};
+
+RefCountedPtr<const FilterConfig> MakeAccessLogConfigWithBody(
+    absl::string_view format) {
+  auto config = MakeRefCounted<XdsAccessLogConfig>();
+  XdsOtelAccessLoggerConfig logger;
+  logger.collector = std::make_shared<const GrpcXdsServerTarget>(
+      "dns:collector.example.com", /*channel_creds_config=*/nullptr,
+      std::vector<RefCountedPtr<const CallCredsConfig>>());
+  logger.log_name = "access";
+  auto formatter = AccessLogFormatter::Parse(format);
+  EXPECT_TRUE(formatter.ok()) << formatter.status();
+  logger.body = std::move(*formatter);
+  config->loggers.push_back(std::move(logger));
+  return config;
+}
+
+MATCHER_P(IsRequestHeaderFilter, names, "") {
+  if (arg.first != XdsAccessLogRequestHeaderFilterFactory::Get()) {
+    *result_listener << "not the request header filter factory";
+    return false;
+  }
+  if (arg.second == nullptr ||
+      arg.second->type() != AccessLogRequestHeaderFilter::Config::Type()) {
+    *result_listener << "wrong config type";
+    return false;
+  }
+  const auto& config =
+      DownCast<const AccessLogRequestHeaderFilter::Config&>(*arg.second);
+  return ::testing::ExplainMatchResult(names, config.request_header_names,
+                                       result_listener);
+}
+
+TEST_F(XdsAccessLogInjectionTest, RequestHeaderFilterGoesBeforeTerminal) {
+  registry_.RegisterFilter(std::make_unique<TestTerminalFilterFactory>());
+  const XdsHttpFilterFactory* terminal_factory =
+      registry_.GetFilterForTopLevelType(
+          TestTerminalFilterFactory::kConfigProtoName);
+  ASSERT_NE(terminal_factory, nullptr);
+  XdsListenerResource::HttpConnectionManager::HttpFilter router;
+  router.name = "router";
+  router.config_proto_type = TestTerminalFilterFactory::kConfigProtoName;
+  std::vector<XdsListenerResource::HttpConnectionManager::HttpFilter>
+      hcm_filters = {MakeHcmFilter("filter1", "hcm"), router};
+  XdsRouting::RouteConfigFilterChainBuilder route_config_builder(
+      hcm_filters, registry_, builder_, *transport_factory_, *blackboard_,
+      MakeAccessLogConfigWithBody("%REQ(x-user)% %REQ(:path)%"));
+  auto vhost = MakeVirtualHost();
+  auto vhost_builder =
+      route_config_builder.MakeVirtualHostFilterChainBuilder(vhost);
+  auto route = MakeRoute();
+  auto filter_chain = vhost_builder.BuildFilterChainForRoute(route);
+  ASSERT_TRUE(filter_chain.ok()) << filter_chain.status();
+  const auto& filters =
+      DownCast<const FakeFilterChain&>(**filter_chain).filters;
+  ASSERT_EQ(filters.size(), 4u);
+  EXPECT_THAT(filters[0], IsAccessLogFilter());
+  EXPECT_THAT(filters[1], IsFilterAndConfig(GetTestXdsHttpFilterFactory(),
+                                            "hcm/blackboard{hcm}"));
+  EXPECT_THAT(filters[2], IsRequestHeaderFilter(::testing::UnorderedElementsAre(
+                              ":path", "x-user")));
+  EXPECT_EQ(filters[3].first, terminal_factory);
+  // The request header filter does not create a second sink.
+  EXPECT_EQ(sink_factory_->num_sinks_created, 1);
+}
+
+TEST_F(XdsAccessLogInjectionTest, RequestHeaderFilterInEveryChain) {
+  std::vector<XdsListenerResource::HttpConnectionManager::HttpFilter>
+      hcm_filters = {MakeHcmFilter("filter1", "hcm")};
+  XdsRouting::RouteConfigFilterChainBuilder route_config_builder(
+      hcm_filters, registry_, builder_, *transport_factory_, *blackboard_,
+      MakeAccessLogConfigWithBody("%REQ(x-user)%"));
+  auto vhost = MakeVirtualHost({{"filter1", MakeOverride("vhost")}});
+  auto vhost_builder =
+      route_config_builder.MakeVirtualHostFilterChainBuilder(vhost);
+  auto route = MakeRoute({{"filter1", MakeOverride("route")}});
+  auto filter_chain = vhost_builder.BuildFilterChainForRoute(route);
+  EXPECT_THAT(
+      filter_chain,
+      IsFilterChain(::testing::ElementsAre(
+          IsAccessLogFilter(),
+          IsFilterAndConfig(GetTestXdsHttpFilterFactory(),
+                            "hcm+vhost+route/blackboard{hcm+vhost+route}"),
+          IsRequestHeaderFilter(::testing::UnorderedElementsAre("x-user")))));
+}
+
+TEST_F(XdsAccessLogInjectionTest, NoRequestHeaderFilterWithoutRequestHeaders) {
+  std::vector<XdsListenerResource::HttpConnectionManager::HttpFilter>
+      hcm_filters = {MakeHcmFilter("filter1", "hcm")};
+  XdsRouting::RouteConfigFilterChainBuilder route_config_builder(
+      hcm_filters, registry_, builder_, *transport_factory_, *blackboard_,
+      MakeAccessLogConfigWithBody("%RESP(x-resp)% %GRPC_STATUS%"));
+  auto vhost = MakeVirtualHost();
+  auto vhost_builder =
+      route_config_builder.MakeVirtualHostFilterChainBuilder(vhost);
+  auto route = MakeRoute();
+  auto filter_chain = vhost_builder.BuildFilterChainForRoute(route);
+  EXPECT_THAT(filter_chain, IsFilterChain(::testing::ElementsAre(
+                                IsAccessLogFilter(),
+                                IsFilterAndConfig(GetTestXdsHttpFilterFactory(),
+                                                  "hcm/blackboard{hcm}"))));
+}
+
+TEST_F(XdsAccessLogInjectionTest, NoSinkFactoryGivesNoRequestHeaderFilter) {
+  SetOtelAccessLogSinkFactory(nullptr);
+  std::vector<XdsListenerResource::HttpConnectionManager::HttpFilter>
+      hcm_filters = {MakeHcmFilter("filter1", "hcm")};
+  XdsRouting::RouteConfigFilterChainBuilder route_config_builder(
+      hcm_filters, registry_, builder_, *transport_factory_, *blackboard_,
+      MakeAccessLogConfigWithBody("%REQ(x-user)%"));
+  auto vhost = MakeVirtualHost();
+  auto vhost_builder =
+      route_config_builder.MakeVirtualHostFilterChainBuilder(vhost);
+  auto route = MakeRoute();
+  auto filter_chain = vhost_builder.BuildFilterChainForRoute(route);
+  ASSERT_TRUE(filter_chain.ok());
+  const auto& filters =
+      DownCast<const FakeFilterChain&>(**filter_chain).filters;
+  // The fake builder records each entry, but the request header factory
+  // gets no config, so its AddFilter() adds no filter to a real chain.
+  ASSERT_EQ(filters.size(), 3u);
+  EXPECT_EQ(filters[2].first, XdsAccessLogRequestHeaderFilterFactory::Get());
+  EXPECT_EQ(filters[2].second, nullptr);
+}
+
 }  // namespace
 }  // namespace testing
 }  // namespace grpc_core
