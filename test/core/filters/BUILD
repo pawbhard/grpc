@@ -463,6 +463,7 @@ grpc_cc_test(
     uses_event_engine = False,
     uses_polling = False,
     deps = [
+        ":filter_matchers",
         ":filter_test_v2",
         "//:grpc",
         "//:ref_counted_ptr",

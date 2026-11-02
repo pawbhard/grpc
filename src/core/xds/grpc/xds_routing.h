@@ -28,10 +28,12 @@
 
 #include "src/core/call/metadata_batch.h"
 #include "src/core/lib/channel/channel_args.h"
+#include "src/core/lib/resource_quota/arena.h"
 #include "src/core/xds/grpc/xds_http_filter_registry.h"
 #include "src/core/xds/grpc/xds_listener.h"
 #include "src/core/xds/grpc/xds_route_config.h"
 #include "absl/functional/any_invocable.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 
@@ -80,6 +82,12 @@ class XdsRouting final {
   static std::optional<absl::string_view> GetHeaderValue(
       grpc_metadata_batch* initial_metadata, absl::string_view header_name,
       std::string* concatenated_value);
+
+  // Stores the status of a call that failed route selection in the call
+  // arena.  The route failure filter of the route failure chain (see
+  // RouteConfigFilterChainBuilder::BuildRouteFailureFilterChain()) fails
+  // the call with this status.  status must not be OK.
+  static void SetRouteFailureStatus(Arena* arena, absl::Status status);
 
   // Logic for building filter chains for each route within a
   // RouteConfiguration.  Caching is done to avoid unnecessary work while
@@ -170,7 +178,8 @@ class XdsRouting final {
     // If access_log_config is not null, the access log filter is added as
     // the first filter of each chain.  If its templates also read request
     // headers, the access log request header filter is added as the last
-    // filter before the terminal filter.
+    // filter before the terminal filter.  The access log config is also
+    // used for the route failure chain (see BuildRouteFailureFilterChain()).
     RouteConfigFilterChainBuilder(
         const std::vector<
             XdsListenerResource::HttpConnectionManager::HttpFilter>&
@@ -185,6 +194,19 @@ class XdsRouting final {
         const XdsRouteConfigResource::VirtualHost& vhost) {
       return VirtualHostFilterChainBuilder(*this, vhost);
     }
+
+    // Builds the chain for calls that fail route selection (for example,
+    // calls that match no route).  The chain holds the access log filter
+    // and then the route failure filter, which fails the call with the
+    // status set by SetRouteFailureStatus().  So the call still writes an
+    // access log record.  Other HCM filters are not added, because the
+    // call does not reach a route.
+    //
+    // Returns null if the HCM has no access log config or no access
+    // logger has a sink.  Then the caller returns the route selection
+    // error directly.
+    absl::StatusOr<RefCountedPtr<const FilterChain>>
+    BuildRouteFailureFilterChain();
 
    private:
     absl::StatusOr<RefCountedPtr<const FilterChain>> GetDefaultFilterChain();

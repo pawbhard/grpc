@@ -53,6 +53,8 @@
 #include "src/core/lib/iomgr/resolved_address.h"
 #include "src/core/lib/iomgr/sockaddr.h"
 #include "src/core/lib/iomgr/socket_utils.h"
+#include "src/core/lib/promise/context.h"
+#include "src/core/lib/resource_quota/arena.h"
 #include "src/core/server/server.h"
 #include "src/core/server/server_config_selector.h"
 #include "src/core/server/server_config_selector_filter.h"
@@ -62,6 +64,7 @@
 #include "src/core/util/host_port.h"
 #include "src/core/util/match.h"
 #include "src/core/util/ref_counted_ptr.h"
+#include "src/core/util/status_helper.h"
 #include "src/core/util/sync.h"
 #include "src/core/util/unique_type_name.h"
 #include "src/core/util/uri.h"
@@ -440,10 +443,22 @@ class XdsServerConfigFetcher::ListenerWatcher::XdsConnectionManager::
     absl::flat_hash_map<const VirtualHost::Route*,
                         absl::StatusOr<RefCountedPtr<const FilterChain>>>
         filter_chains;
+    // The chain for calls that fail route selection.  Null if the HCM
+    // has no access log.
+    absl::StatusOr<RefCountedPtr<const FilterChain>> failure_filter_chain =
+        nullptr;
   };
+
+  // Returns the route failure chain, after it stores status in the call
+  // arena.  Returns status if there is no route failure chain.
+  static absl::StatusOr<RefCountedPtr<const FilterChain>> RouteFailure(
+      const ConnectionState* state, absl::Status status);
 
   std::shared_ptr<const XdsRouteConfigResource> route_config_;
   std::vector<VirtualHost> virtual_hosts_;
+  // The filters of the route failure chain.  Null if the HCM has no
+  // access log.
+  RefCountedPtr<const FilterList> failure_filter_list_;
 };
 
 //
@@ -1268,6 +1283,15 @@ XdsServerConfigFetcher::ListenerWatcher::XdsConnectionManager::L4FilterChain::
           filter_list->TakeAsSubclass<const FilterList>();
     }
   }
+  // Calls that fail route selection use this chain, so that they are
+  // logged.
+  auto failure_filter_list =
+      route_config_builder.BuildRouteFailureFilterChain();
+  if (!failure_filter_list.ok()) return failure_filter_list.status();
+  if (*failure_filter_list != nullptr) {
+    config_selector->failure_filter_list_ =
+        failure_filter_list->TakeAsSubclass<const FilterList>();
+  }
   config_selector->route_config_ = std::move(route_config);
   return config_selector;
 }
@@ -1298,6 +1322,12 @@ XdsServerConfigFetcher::ListenerWatcher::XdsConnectionManager::L4FilterChain::
       connection_state->filter_chains.emplace(&route, std::move(filter_chain));
     }
   }
+  if (failure_filter_list_ != nullptr) {
+    for (const auto& [factory, config] : failure_filter_list_->filters) {
+      factory->AddFilter(builder, config);
+    }
+    connection_state->failure_filter_chain = builder.Build();
+  }
   return connection_state;
 }
 
@@ -1318,20 +1348,21 @@ XdsServerConfigFetcher::ListenerWatcher::XdsConnectionManager::L4FilterChain::
   auto vhost_index = XdsRouting::FindVirtualHostForDomain(
       VirtualHostListIterator(virtual_hosts_), authority);
   if (!vhost_index.has_value()) {
-    return absl::UnavailableError(
-        absl::StrCat("could not find VirtualHost for ", authority,
-                     " in RouteConfiguration"));
+    return RouteFailure(state, absl::UnavailableError(absl::StrCat(
+                                   "could not find VirtualHost for ", authority,
+                                   " in RouteConfiguration")));
   }
   auto& virtual_host = virtual_hosts_[vhost_index.value()];
   auto route_index = XdsRouting::GetRouteForRequest(
       VirtualHost::RouteListIterator(virtual_host.routes), path, metadata);
   if (!route_index.has_value()) {
-    return absl::UnavailableError("no route matched");
+    return RouteFailure(state, absl::UnavailableError("no route matched"));
   }
   auto& route = virtual_host.routes[*route_index];
   // Found the matching route
   if (route.unsupported_action) {
-    return absl::UnavailableError("matching route has unsupported action");
+    return RouteFailure(
+        state, absl::UnavailableError("matching route has unsupported action"));
   }
   // Find filter chain.
   const auto& filter_chains =
@@ -1342,6 +1373,24 @@ XdsServerConfigFetcher::ListenerWatcher::XdsConnectionManager::L4FilterChain::
     return absl::InternalError("no filter chain found for route");
   }
   return it->second;
+}
+
+absl::StatusOr<RefCountedPtr<const FilterChain>>
+XdsServerConfigFetcher::ListenerWatcher::XdsConnectionManager::L4FilterChain::
+    XdsServerConfigSelector::RouteFailure(const ConnectionState* state,
+                                          absl::Status status) {
+  const auto& failure_filter_chain =
+      DownCast<const XdsConnectionState*>(state)->failure_filter_chain;
+  if (!failure_filter_chain.ok() || *failure_filter_chain == nullptr) {
+    return status;
+  }
+  Arena* arena = MaybeGetContext<Arena>();
+  if (arena == nullptr) return status;
+  // ServerConfigSelectorInterceptor sends this status when GetCallConfig()
+  // fails.  Send the same status from the route failure chain.
+  XdsRouting::SetRouteFailureStatus(
+      arena, absl::UnavailableError(StatusToString(status)));
+  return failure_filter_chain;
 }
 
 }  // namespace

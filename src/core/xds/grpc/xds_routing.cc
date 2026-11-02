@@ -29,11 +29,14 @@
 #include <vector>
 
 #include "src/core/call/metadata_batch.h"
+#include "src/core/filter/access_log/access_log_filter.h"
 #include "src/core/filter/filter_args.h"
 #include "src/core/filter/filter_chain.h"
 #include "src/core/lib/channel/channel_args.h"
 #include "src/core/lib/debug/trace.h"
+#include "src/core/lib/resource_quota/arena.h"
 #include "src/core/lib/slice/slice.h"
+#include "src/core/util/down_cast.h"
 #include "src/core/util/grpc_check.h"
 #include "src/core/util/json/json.h"
 #include "src/core/util/matchers.h"
@@ -293,6 +296,52 @@ XdsRouting::RouteConfigFilterChainBuilder::GetDefaultFilterChain() {
         << "Filter chain creation status: " << default_filter_chain_.status();
   }
   return default_filter_chain_;
+}
+
+absl::StatusOr<RefCountedPtr<const FilterChain>>
+XdsRouting::RouteConfigFilterChainBuilder::BuildRouteFailureFilterChain() {
+  // The constructor puts the access log filter (if any) first.  Read the
+  // config from that entry, because the constructor moved the
+  // access_log_config parameter.
+  if (factories_.empty() || factories_[0] != XdsAccessLogFilterFactory::Get() ||
+      hcm_filter_configs_[0].filter_config == nullptr) {
+    return nullptr;
+  }
+  const auto& access_log_entry = hcm_filter_configs_[0];
+  // MergeConfigs() gets the sink from the Blackboard, so this chain and
+  // the route chains share one sink.
+  RefCountedPtr<const FilterConfig> access_log_config =
+      factories_[0]->MergeConfigs(access_log_entry.filter_config, nullptr,
+                                  nullptr, nullptr, transport_factory_,
+                                  blackboard_);
+  // Without a logger with a sink, there is nothing to log.
+  if (access_log_config == nullptr ||
+      DownCast<const AccessLogFilter::Config&>(*access_log_config)
+          .loggers.empty()) {
+    return nullptr;
+  }
+  GRPC_TRACE_LOG(xds_resolver, INFO) << "Building route failure filter chain:";
+  GRPC_TRACE_LOG(xds_resolver, INFO)
+      << "  Adding filter=" << access_log_entry.name
+      << " config=" << access_log_config->ToString();
+  builder_.AddFilter(factories_[0], std::move(access_log_config));
+  GRPC_TRACE_LOG(xds_resolver, INFO)
+      << "  Adding filter=" << XdsRouteFailureFilterFactory::kFilterName
+      << " config=<null>";
+  builder_.AddFilter(XdsRouteFailureFilterFactory::Get(), nullptr);
+  absl::StatusOr<RefCountedPtr<const FilterChain>> filter_chain =
+      builder_.Build();
+  GRPC_TRACE_LOG(xds_resolver, INFO)
+      << "Filter chain creation status: " << filter_chain.status();
+  return filter_chain;
+}
+
+void XdsRouting::SetRouteFailureStatus(Arena* arena, absl::Status status) {
+  GRPC_CHECK(!status.ok());
+  RouteFailureContext* context = arena->New<RouteFailureContext>();
+  context->status = std::move(status);
+  // The arena calls the destructor when the call ends.
+  arena->SetContext<RouteFailureContext>(context);
 }
 
 namespace {

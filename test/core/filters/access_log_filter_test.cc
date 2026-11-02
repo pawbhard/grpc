@@ -24,6 +24,7 @@
 #include "src/core/lib/channel/channel_args.h"
 #include "src/core/util/ref_counted_ptr.h"
 #include "src/core/util/sync.h"
+#include "test/core/filters/filter_matchers.h"
 #include "test/core/filters/filter_test_v2.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -294,6 +295,34 @@ TEST_F(AccessLogRequestHeaderFilterTest, ConfigEqualityAndToString) {
   EXPECT_NE(*a, *c);
   EXPECT_EQ(a->ToString(),
             "{request_header_names=[:path, x-added, x-removed]}");
+}
+
+//
+// RouteFailureFilter
+//
+
+class RouteFailureFilterTest : public FilterTestV2<RouteFailureFilter> {};
+
+// The filter fails the call with the status that the config selector
+// stored in the arena.
+TEST_F(RouteFailureFilterTest, ReturnsStatusFromContext) {
+  Call call(MakeChannel(ChannelArgs()).value());
+  RouteFailureContext* context = call.arena()->New<RouteFailureContext>();
+  context->status = absl::UnavailableError("no route matched");
+  call.arena()->SetContext<RouteFailureContext>(context);
+  call.Start(call.NewClientMetadata({{":path", "/pkg.Svc/Method"}}));
+  EXPECT_EVENT(Finished(
+      &call, HasMetadataResult(absl::UnavailableError("no route matched"))));
+  Step();
+}
+
+// The call never reaches the next filter if the status is missing.
+TEST_F(RouteFailureFilterTest, MissingContextGivesInternal) {
+  Call call(MakeChannel(ChannelArgs()).value());
+  call.Start(call.NewClientMetadata({{":path", "/pkg.Svc/Method"}}));
+  EXPECT_EVENT(Finished(&call, HasMetadataResult(absl::InternalError(
+                                   "route failure status not set"))));
+  Step();
 }
 
 }  // namespace

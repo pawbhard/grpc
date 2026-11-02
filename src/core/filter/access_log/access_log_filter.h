@@ -39,6 +39,7 @@
 #include "src/core/util/time.h"
 #include "src/core/util/unique_type_name.h"
 #include "src/core/xds/grpc/blackboard.h"
+#include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 
@@ -230,6 +231,54 @@ class AccessLogRequestHeaderFilter final
 
  private:
   RefCountedPtr<const Config> config_;
+};
+
+// The status of a call that failed xDS route selection.  The config
+// selector allocates the object on the call arena and sets it as an arena
+// context before it returns the route failure chain.  RouteFailureFilter
+// reads it.
+struct RouteFailureContext {
+  absl::Status status;
+};
+
+template <>
+struct ArenaContextType<RouteFailureContext> {
+  static void Destroy(RouteFailureContext* context) {
+    context->~RouteFailureContext();
+  }
+};
+
+// Fails each call with the status in the RouteFailureContext of the call.
+//
+// The filter is the last filter of the route failure chain, which the
+// xDS config selectors use for calls that fail route selection.  The
+// AccessLogFilter is first in that chain, so the call still writes one
+// access log record with the failure status.
+class RouteFailureFilter final
+    : public ImplementChannelFilter<RouteFailureFilter> {
+ public:
+  static const grpc_channel_filter kFilterVtable;
+
+  static absl::string_view TypeName() { return "route_failure"; }
+
+  static absl::StatusOr<std::unique_ptr<RouteFailureFilter>> Create(
+      const ChannelArgs& args, ChannelFilter::Args filter_args);
+
+  class Call {
+   public:
+    absl::Status OnClientInitialMetadata(ClientMetadata& md,
+                                         RouteFailureFilter* filter);
+    static inline const NoInterceptor OnServerInitialMetadata;
+    static inline const NoInterceptor OnServerTrailingMetadata;
+    static inline const NoInterceptor OnClientToServerMessage;
+    static inline const NoInterceptor OnClientToServerHalfClose;
+    static inline const NoInterceptor OnServerToClientMessage;
+    static inline const NoInterceptor OnFinalize;
+
+    channelz::PropertyList ChannelzProperties() {
+      return channelz::PropertyList();
+    }
+  };
 };
 
 }  // namespace grpc_core

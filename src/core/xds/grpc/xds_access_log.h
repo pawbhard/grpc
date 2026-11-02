@@ -177,6 +177,44 @@ class XdsAccessLogRequestHeaderFilterFactory final
   bool IsSupportedOnServers() const override { return true; }
 };
 
+// Adds the RouteFailureFilter to filter chains.
+//
+// Like XdsAccessLogFilterFactory, this factory is not registered in the
+// XdsHttpFilterRegistry.  XdsRouting adds it as the last filter of the
+// route failure chain, after the AccessLogFilter.  The filter has no
+// config.
+class XdsRouteFailureFilterFactory final : public XdsHttpFilterFactory {
+ public:
+  // Name of the internal filter entry in the route failure chain.
+  static constexpr absl::string_view kFilterName =
+      "grpc.internal.route_failure";
+
+  static const XdsRouteFailureFilterFactory* Get();
+
+  absl::string_view ConfigProtoName() const override;
+  absl::string_view OverrideConfigProtoName() const override { return ""; }
+  void PopulateSymtab(upb_DefPool* /*symtab*/) const override {}
+  void AddFilter(FilterChainBuilder& builder,
+                 RefCountedPtr<const FilterConfig> config) const override;
+  RefCountedPtr<const FilterConfig> ParseTopLevelConfig(
+      absl::string_view instance_name,
+      const XdsResourceType::DecodeContext& context,
+      const XdsExtension& extension, ValidationErrors* errors) const override;
+  RefCountedPtr<const FilterConfig> ParseOverrideConfig(
+      absl::string_view instance_name,
+      const XdsResourceType::DecodeContext& context,
+      const XdsExtension& extension, ValidationErrors* errors) const override;
+  RefCountedPtr<const FilterConfig> MergeConfigs(
+      RefCountedPtr<const FilterConfig> top_level_config,
+      RefCountedPtr<const FilterConfig> virtual_host_override_config,
+      RefCountedPtr<const FilterConfig> route_override_config,
+      RefCountedPtr<const FilterConfig> cluster_weight_override_config,
+      XdsTransportFactory& transport_factory,
+      Blackboard& blackboard) const override;
+  bool IsSupportedOnClients() const override { return true; }
+  bool IsSupportedOnServers() const override { return true; }
+};
+
 }  // namespace grpc_core
 
 #endif  // GRPC_SRC_CORE_XDS_GRPC_XDS_ACCESS_LOG_H

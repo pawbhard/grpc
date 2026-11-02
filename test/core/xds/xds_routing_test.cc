@@ -1115,6 +1115,94 @@ TEST_F(XdsAccessLogInjectionTest, NoSinkFactoryGivesNoRequestHeaderFilter) {
   EXPECT_EQ(filters[2].second, nullptr);
 }
 
+//
+// Route failure chain
+//
+
+MATCHER(IsRouteFailureFilter, "") {
+  if (arg.first != XdsRouteFailureFilterFactory::Get()) {
+    *result_listener << "not the route failure filter factory";
+    return false;
+  }
+  if (arg.second != nullptr) {
+    *result_listener << "unexpected config";
+    return false;
+  }
+  return true;
+}
+
+TEST_F(XdsAccessLogInjectionTest,
+       RouteFailureChainHasAccessLogAndFailureFilter) {
+  std::vector<XdsListenerResource::HttpConnectionManager::HttpFilter>
+      hcm_filters = {MakeHcmFilter("filter1", "hcm")};
+  XdsRouting::RouteConfigFilterChainBuilder route_config_builder(
+      hcm_filters, registry_, builder_, *transport_factory_, *blackboard_,
+      MakeAccessLogConfig());
+  auto vhost = MakeVirtualHost();
+  auto vhost_builder =
+      route_config_builder.MakeVirtualHostFilterChainBuilder(vhost);
+  auto route = MakeRoute();
+  auto route_chain = vhost_builder.BuildFilterChainForRoute(route);
+  ASSERT_TRUE(route_chain.ok()) << route_chain.status();
+  auto failure_chain = route_config_builder.BuildRouteFailureFilterChain();
+  EXPECT_THAT(failure_chain, IsFilterChain(::testing::ElementsAre(
+                                 IsAccessLogFilter(), IsRouteFailureFilter())));
+  // The route chain and the route failure chain share one sink.
+  ASSERT_TRUE(failure_chain.ok());
+  const auto& route_filters =
+      DownCast<const FakeFilterChain&>(**route_chain).filters;
+  const auto& failure_filters =
+      DownCast<const FakeFilterChain&>(**failure_chain).filters;
+  EXPECT_EQ(DownCast<const AccessLogFilter::Config&>(*route_filters[0].second)
+                .loggers[0]
+                .sink,
+            DownCast<const AccessLogFilter::Config&>(*failure_filters[0].second)
+                .loggers[0]
+                .sink);
+  EXPECT_EQ(sink_factory_->num_sinks_created, 1);
+}
+
+// The call does not reach a route, so the HCM filters, the terminal
+// filter and the request header filter are not in the chain.
+TEST_F(XdsAccessLogInjectionTest, RouteFailureChainSkipsOtherFilters) {
+  registry_.RegisterFilter(std::make_unique<TestTerminalFilterFactory>());
+  XdsListenerResource::HttpConnectionManager::HttpFilter router;
+  router.name = "router";
+  router.config_proto_type = TestTerminalFilterFactory::kConfigProtoName;
+  std::vector<XdsListenerResource::HttpConnectionManager::HttpFilter>
+      hcm_filters = {MakeHcmFilter("filter1", "hcm"), router};
+  XdsRouting::RouteConfigFilterChainBuilder route_config_builder(
+      hcm_filters, registry_, builder_, *transport_factory_, *blackboard_,
+      MakeAccessLogConfigWithBody("%REQ(x-user)% %GRPC_STATUS%"));
+  auto failure_chain = route_config_builder.BuildRouteFailureFilterChain();
+  EXPECT_THAT(failure_chain, IsFilterChain(::testing::ElementsAre(
+                                 IsAccessLogFilter(), IsRouteFailureFilter())));
+}
+
+TEST_F(XdsAccessLogInjectionTest, NoAccessLogConfigGivesNoRouteFailureChain) {
+  std::vector<XdsListenerResource::HttpConnectionManager::HttpFilter>
+      hcm_filters = {MakeHcmFilter("filter1", "hcm")};
+  XdsRouting::RouteConfigFilterChainBuilder route_config_builder(
+      hcm_filters, registry_, builder_, *transport_factory_, *blackboard_);
+  auto failure_chain = route_config_builder.BuildRouteFailureFilterChain();
+  ASSERT_TRUE(failure_chain.ok()) << failure_chain.status();
+  EXPECT_EQ(*failure_chain, nullptr);
+}
+
+// Without a sink, nothing can be logged, so the caller keeps the old
+// error path.
+TEST_F(XdsAccessLogInjectionTest, NoSinkFactoryGivesNoRouteFailureChain) {
+  SetOtelAccessLogSinkFactory(nullptr);
+  std::vector<XdsListenerResource::HttpConnectionManager::HttpFilter>
+      hcm_filters = {MakeHcmFilter("filter1", "hcm")};
+  XdsRouting::RouteConfigFilterChainBuilder route_config_builder(
+      hcm_filters, registry_, builder_, *transport_factory_, *blackboard_,
+      MakeAccessLogConfig());
+  auto failure_chain = route_config_builder.BuildRouteFailureFilterChain();
+  ASSERT_TRUE(failure_chain.ok()) << failure_chain.status();
+  EXPECT_EQ(*failure_chain, nullptr);
+}
+
 }  // namespace
 }  // namespace testing
 }  // namespace grpc_core

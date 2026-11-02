@@ -299,8 +299,10 @@ class XdsOtelAccessLogEnd2endTest : public XdsEnd2endTest {
   }
 
   // If ext_proc is not null, an ext_proc filter is added before the router.
+  // If route_config is not null, it replaces the default route config.
   void SetAccessLogConfig(const OpenTelemetryAccessLogConfig& config,
-                          const ExternalProcessor* ext_proc = nullptr) {
+                          const ExternalProcessor* ext_proc = nullptr,
+                          const RouteConfiguration* route_config = nullptr) {
     Listener listener = GetParam().filter_on_server() ? default_server_listener_
                                                       : default_listener_;
     std::unique_ptr<HcmAccessor> hcm_accessor;
@@ -321,12 +323,14 @@ class XdsOtelAccessLogEnd2endTest : public XdsEnd2endTest {
     access_log->mutable_typed_config()->PackFrom(config);
     hcm_accessor->Pack(hcm, &listener);
     if (GetParam().filter_on_server()) {
-      SetServerListenerNameAndRouteConfiguration(balancer_.get(), listener,
-                                                 backends_[0]->port(),
-                                                 default_server_route_config_);
+      SetServerListenerNameAndRouteConfiguration(
+          balancer_.get(), listener, backends_[0]->port(),
+          route_config != nullptr ? *route_config
+                                  : default_server_route_config_);
     } else {
-      SetListenerAndRouteConfiguration(balancer_.get(), listener,
-                                       default_route_config_);
+      SetListenerAndRouteConfiguration(
+          balancer_.get(), listener,
+          route_config != nullptr ? *route_config : default_route_config_);
     }
   }
 
@@ -395,6 +399,42 @@ TEST_P(XdsOtelAccessLogEnd2endTest, FailedRpcIsLogged) {
                 return r.body().string_value() ==
                        "/grpc.testing.EchoTestService/Echo FailedPrecondition";
               })));
+}
+
+// An RPC that matches no route fails before a route chain is selected.
+// The route failure chain still writes one record.  The RPC gets the same
+// status as without an access log.
+TEST_P(XdsOtelAccessLogEnd2endTest, UnroutedRpcIsLogged) {
+  RouteConfiguration route_config = GetParam().filter_on_server()
+                                        ? default_server_route_config_
+                                        : default_route_config_;
+  route_config.mutable_virtual_hosts(0)
+      ->mutable_routes(0)
+      ->mutable_match()
+      ->set_path("/grpc.testing.EchoTestService/Echo");
+  SetAccessLogConfig(MakeAccessLogConfig(), /*ext_proc=*/nullptr,
+                     &route_config);
+  StartBackendServer();
+  CheckRpcSendOk(DEBUG_LOCATION);
+  CheckRpcSendFailure(DEBUG_LOCATION, StatusCode::UNAVAILABLE,
+                      GetParam().filter_on_server()
+                          ? "UNAVAILABLE:no route matched"
+                          : "No matching route found in xDS route config",
+                      RpcOptions().set_rpc_method(METHOD_ECHO1));
+  std::vector<LogRecord> log_records =
+      collector_->service()->WaitForLogRecords(2, absl::Seconds(10));
+  ASSERT_EQ(log_records.size(), 2u);
+  EXPECT_THAT(log_records,
+              ::testing::Contains(::testing::Truly([](const LogRecord& r) {
+                return r.body().string_value() ==
+                           "/grpc.testing.EchoTestService/Echo1 Unavailable" &&
+                       GetStringAttribute(r, "status") == "14";
+              })));
+  // No extra records arrive.
+  absl::SleepFor(absl::Milliseconds(300) * grpc_test_slowdown_factor());
+  EXPECT_EQ(
+      collector_->service()->WaitForLogRecords(2, absl::ZeroDuration()).size(),
+      2u);
 }
 
 // ext_proc changes the request headers.  The access log filter is first in

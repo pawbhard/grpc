@@ -685,4 +685,54 @@ XdsAccessLogRequestHeaderFilterFactory::MergeConfigs(
   return config;
 }
 
+//
+// XdsRouteFailureFilterFactory
+//
+
+const XdsRouteFailureFilterFactory* XdsRouteFailureFilterFactory::Get() {
+  static const XdsRouteFailureFilterFactory* factory =
+      new XdsRouteFailureFilterFactory();
+  return factory;
+}
+
+absl::string_view XdsRouteFailureFilterFactory::ConfigProtoName() const {
+  // Internal name.  The factory is not registered, so no xDS resource can
+  // refer to it.
+  return "grpc.internal.RouteFailure";
+}
+
+void XdsRouteFailureFilterFactory::AddFilter(
+    FilterChainBuilder& builder,
+    RefCountedPtr<const FilterConfig> /*config*/) const {
+  builder.AddFilter<RouteFailureFilter>(nullptr);
+}
+
+RefCountedPtr<const FilterConfig>
+XdsRouteFailureFilterFactory::ParseTopLevelConfig(
+    absl::string_view /*instance_name*/,
+    const XdsResourceType::DecodeContext& /*context*/,
+    const XdsExtension& /*extension*/, ValidationErrors* errors) const {
+  errors->AddError("route failure filter is not an HTTP filter");
+  return nullptr;
+}
+
+RefCountedPtr<const FilterConfig>
+XdsRouteFailureFilterFactory::ParseOverrideConfig(
+    absl::string_view /*instance_name*/,
+    const XdsResourceType::DecodeContext& /*context*/,
+    const XdsExtension& /*extension*/, ValidationErrors* errors) const {
+  errors->AddError("route failure filter does not support config overrides");
+  return nullptr;
+}
+
+RefCountedPtr<const FilterConfig> XdsRouteFailureFilterFactory::MergeConfigs(
+    RefCountedPtr<const FilterConfig> /*top_level_config*/,
+    RefCountedPtr<const FilterConfig> /*virtual_host_override_config*/,
+    RefCountedPtr<const FilterConfig> /*route_override_config*/,
+    RefCountedPtr<const FilterConfig> /*cluster_weight_override_config*/,
+    XdsTransportFactory& /*transport_factory*/,
+    Blackboard& /*blackboard*/) const {
+  return nullptr;
+}
+
 }  // namespace grpc_core

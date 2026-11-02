@@ -313,4 +313,27 @@ void AccessLogRequestHeaderFilter::Call::OnClientInitialMetadata(
                  context->request_headers);
 }
 
+//
+// RouteFailureFilter
+//
+
+const grpc_channel_filter RouteFailureFilter::kFilterVtable =
+    MakePromiseBasedFilter<RouteFailureFilter, FilterEndpoint::kClient>();
+
+absl::StatusOr<std::unique_ptr<RouteFailureFilter>> RouteFailureFilter::Create(
+    const ChannelArgs& /*args*/, ChannelFilter::Args /*filter_args*/) {
+  return std::make_unique<RouteFailureFilter>();
+}
+
+absl::Status RouteFailureFilter::Call::OnClientInitialMetadata(
+    ClientMetadata& /*md*/, RouteFailureFilter* /*filter*/) {
+  RouteFailureContext* context = MaybeGetContext<RouteFailureContext>();
+  // The config selector always sets the context before it selects this
+  // chain.  Never let the call through if it is missing.
+  if (context == nullptr || context->status.ok()) {
+    return absl::InternalError("route failure status not set");
+  }
+  return context->status;
+}
+
 }  // namespace grpc_core
