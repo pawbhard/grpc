@@ -490,6 +490,7 @@ class ArtifactGen {
         {"@@envoy_api+", "@envoy_api"},
         {"@@grpc-proto+", "@grpc_proto"},
         {"@@autosharding+", "@autosharding"},
+        {"@@opentelemetry-proto+", "@opentelemetry-proto"},
     };
     const std::map<std::string, std::string> kExternalLinks{
         {"@com_google_protobuf//", "src/"},
@@ -501,6 +502,7 @@ class ArtifactGen {
         {"@opencensus_proto//", ""},
         {"@grpc_proto//", ""},
         {"@autosharding//", ""},
+        {"@opentelemetry-proto//", ""},
     };
     for (auto& [name, bazel_rule] : rules_) {
       const bool is_dev_cel_upb = bazel_rule.clazz == "upb_c_proto_library" &&

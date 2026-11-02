@@ -376,6 +376,7 @@ class XdsServerConfigFetcher::ListenerWatcher::XdsConnectionManager::
       XdsTransportFactory& transport_factory,
       const std::vector<XdsListenerResource::HttpConnectionManager::HttpFilter>&
           http_filters,
+      RefCountedPtr<const FilterConfig> access_log_config,
       std::shared_ptr<const XdsRouteConfigResource> route_config,
       Blackboard& blackboard);
 
@@ -1177,6 +1178,7 @@ XdsServerConfigFetcher::ListenerWatcher::XdsConnectionManager::L4FilterChain::
           .http_filter_registry(),
       *fetcher_state_->xds_client->transport_factory(),
       filter_chain_data_.http_connection_manager.http_filters,
+      filter_chain_data_.http_connection_manager.access_log_config,
       std::move(*route_config), *connection_manager_->blackboard_);
 }
 
@@ -1241,13 +1243,14 @@ XdsServerConfigFetcher::ListenerWatcher::XdsConnectionManager::L4FilterChain::
         const std::vector<
             XdsListenerResource::HttpConnectionManager::HttpFilter>&
             http_filters,
+        RefCountedPtr<const FilterConfig> access_log_config,
         std::shared_ptr<const XdsRouteConfigResource> route_config,
         Blackboard& blackboard) {
   auto config_selector = MakeRefCounted<XdsServerConfigSelector>();
   FilterListBuilder filter_list_builder;
   XdsRouting::RouteConfigFilterChainBuilder route_config_builder(
       http_filters, http_filter_registry, filter_list_builder,
-      transport_factory, blackboard);
+      transport_factory, blackboard, std::move(access_log_config));
   for (auto& vhost : route_config->virtual_hosts) {
     auto vhost_builder =
         route_config_builder.MakeVirtualHostFilterChainBuilder(vhost);

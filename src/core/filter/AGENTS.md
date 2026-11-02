@@ -16,7 +16,7 @@ See also: [gRPC Core overview](../AGENTS.md)
 
 *   Provides filter configuration (`FilterConfig`, `FilterArgs`) and chain-building abstractions (`FilterChain`, `FilterChainBuilder`).
 *   Registers fused filter combinations (`RegisterFusedFilters`) for common client and server stacks.
-*   Implements authentication (`auth/`), composite (`composite/`), and external processing (`ext_proc/`) filters.
+*   Implements access log (`access_log/`), authentication (`auth/`), composite (`composite/`), and external processing (`ext_proc/`) filters.
 *   Core filter interfaces and stack machinery live in [lib/channel](../lib/channel/AGENTS.md) and [call](../call/AGENTS.md).
 
 ## Core Concepts
@@ -37,6 +37,10 @@ See also: [gRPC Core overview](../AGENTS.md)
 *   **`filter_args.h`**: Defines `FilterConfig`, `FilterAndConfig`, `FilterArgs`, `GRPC_ARG_USE_V3_STACK`, and `GRPC_ARG_IS_SERVER_FILTER_STACK`.
 *   **`filter_chain.h`**: Defines `FilterChain` and `FilterChainBuilder`.
 *   **`fused_filters.cc`**: Defines and registers fused filter combinations via `RegisterFusedFilters`.
+*   **`access_log/`**: Implements `AccessLogFilter`, which writes one access log record per RPC for each configured logger (`access_log_filter.{h,cc}`).
+    *   `access_log_formatter.{h,cc}`: `AccessLogFormatter` evaluates Envoy-style substitution templates (for example, `%REQ(:path)%`).
+    *   `access_log_sink.h`: `AccessLogSink` receives the records.
+    *   `otel_access_log_sink.{h,cc}`: `OtelAccessLogSinkFactory` registry; the OpenTelemetry plugin (`src/cpp/ext/otel/otel_access_log.cc`) registers the implementation.
 *   **`auth/`**: Implements `ClientAuthFilter` and `ServerAuthFilter` (`auth_filters.h`, `client_auth_filter.cc`, `server_auth_filter.cc`).
 *   **`composite/`**: Implements `CompositeFilter` for xDS matcher-driven filter execution (`composite_filter.{h,cc}`).
 *   **`ext_proc/`**: Implements `ExtProcFilter` for xDS external processing (`ext_proc_filter.{h,cc}`, `ext_proc_messages.{h,cc}`).

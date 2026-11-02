@@ -453,7 +453,7 @@ void XdsResolver::RouteConfigData::BuildFilterChains(
   FilterChainBuilderWrapper builder_wrapper(builder);
   XdsRouting::RouteConfigFilterChainBuilder route_config_builder(
       hcm.http_filters, http_filter_registry, builder_wrapper,
-      transport_factory, blackboard);
+      transport_factory, blackboard, hcm.access_log_config);
   auto vhost_builder = route_config_builder.MakeVirtualHostFilterChainBuilder(
       *xds_config.virtual_host);
   // Set the filter chain for each route.

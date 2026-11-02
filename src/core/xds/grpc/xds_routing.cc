@@ -39,6 +39,7 @@
 #include "src/core/util/matchers.h"
 #include "src/core/util/ref_counted_ptr.h"
 #include "src/core/xds/grpc/blackboard.h"
+#include "src/core/xds/grpc/xds_access_log.h"
 #include "src/core/xds/grpc/xds_http_filter.h"
 #include "src/core/xds/grpc/xds_http_filter_registry.h"
 #include "src/core/xds/grpc/xds_listener.h"
@@ -217,12 +218,24 @@ XdsRouting::RouteConfigFilterChainBuilder::RouteConfigFilterChainBuilder(
         hcm_filter_configs,
     const XdsHttpFilterRegistry& http_filter_registry,
     XdsFilterChainBuilder& builder, XdsTransportFactory& transport_factory,
-    Blackboard& blackboard)
-    : hcm_filter_configs_(hcm_filter_configs),
-      builder_(builder),
+    Blackboard& blackboard, RefCountedPtr<const FilterConfig> access_log_config)
+    : builder_(builder),
       blackboard_(blackboard),
       transport_factory_(transport_factory) {
-  factories_.reserve(hcm_filter_configs.size());
+  hcm_filter_configs_.reserve(hcm_filter_configs.size() + 1);
+  factories_.reserve(hcm_filter_configs.size() + 1);
+  // The access log filter goes first, so that it sees the final status
+  // of the call, including statuses that later filters produce.
+  if (access_log_config != nullptr) {
+    const XdsHttpFilterFactory* factory = XdsAccessLogFilterFactory::Get();
+    XdsListenerResource::HttpConnectionManager::HttpFilter access_log_filter;
+    access_log_filter.name =
+        std::string(XdsAccessLogFilterFactory::kFilterName);
+    access_log_filter.config_proto_type = factory->ConfigProtoName();
+    access_log_filter.filter_config = std::move(access_log_config);
+    hcm_filter_configs_.push_back(std::move(access_log_filter));
+    factories_.push_back(factory);
+  }
   for (const auto& http_filter : hcm_filter_configs) {
     // Find filter.  This is guaranteed to succeed, because it's checked
     // at config validation time.
@@ -231,6 +244,7 @@ XdsRouting::RouteConfigFilterChainBuilder::RouteConfigFilterChainBuilder(
             http_filter.config_proto_type);
     GRPC_CHECK_NE(factory, nullptr);
     // Add filter to list.
+    hcm_filter_configs_.push_back(http_filter);
     factories_.push_back(factory);
   }
 }

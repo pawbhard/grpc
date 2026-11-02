@@ -42,6 +42,9 @@ namespace grpc_core {
 
 bool XdsExtProcOnClientEnabled();
 
+// Returns true if GRPC_EXPERIMENTAL_XDS_OTEL_ACCESS_LOG is enabled.
+bool XdsOtelAccessLogEnabled();
+
 class GrpcXdsBootstrapBuilder;
 
 class GrpcXdsBootstrap final : public XdsBootstrap {
