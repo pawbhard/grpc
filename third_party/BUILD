@@ -87,6 +87,12 @@ alias(
 )
 
 alias(
+    name = "libuv",
+    actual = "@com_github_libuv_libuv//:libuv",
+    tags = ["manual"],
+)
+
+alias(
     name = "gtest",
     actual = "@com_google_googletest//:gtest",
     tags = ["manual"],

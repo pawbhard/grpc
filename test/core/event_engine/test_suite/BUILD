@@ -102,6 +102,55 @@ grpc_cc_test(
 )
 
 grpc_cc_test(
+    name = "uv_event_engine_test",
+    srcs = ["uv_event_engine_test.cc"],
+    external_deps = ["gtest"],
+    tags = [
+        "no_test_ios",
+        "no_windows",
+        "requires-net:ipv4",
+        "requires-net:loopback",
+    ],
+    uses_event_engine = True,
+    uses_polling = False,
+    deps = [
+        "//:grpc",
+        "//src/core:uv_event_engine",
+        "//test/core/event_engine:event_engine_test_utils",
+        "//test/core/event_engine/test_suite:event_engine_test_framework",
+        "//test/core/event_engine/test_suite/posix:oracle_event_engine_posix",
+        "//test/core/event_engine/test_suite/tests:client",
+        "//test/core/event_engine/test_suite/tests:dns",
+        "//test/core/event_engine/test_suite/tests:endpoint",
+        "//test/core/event_engine/test_suite/tests:server",
+        "//test/core/event_engine/test_suite/tests:timer",
+        "//test/core/test_util:grpc_test_util",
+    ],
+)
+
+grpc_cc_test(
+    name = "uv_event_engine_native_dns_test",
+    srcs = ["uv_event_engine_native_dns_test.cc"],
+    external_deps = ["gtest"],
+    tags = [
+        "no_test_ios",
+        "no_windows",
+    ],
+    uses_event_engine = True,
+    uses_polling = False,
+    deps = [
+        ":event_engine_test_framework",
+        "//:config_vars",
+        "//:grpc",
+        "//src/core:uv_event_engine",
+        "//test/core/event_engine:event_engine_test_utils",
+        "//test/core/event_engine/test_suite/posix:oracle_event_engine_posix",
+        "//test/core/event_engine/test_suite/tests:dns",
+        "//test/core/test_util:grpc_test_util",
+    ],
+)
+
+grpc_cc_test(
     name = "thready_posix_event_engine_test",
     srcs = ["thready_posix_event_engine_test.cc"],
     external_deps = [

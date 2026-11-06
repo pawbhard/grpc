@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-load("//bazel:grpc_build_system.bzl", "grpc_cc_library", "grpc_cc_test", "grpc_package")
+load("//bazel:grpc_build_system.bzl", "grpc_cc_library", "grpc_cc_test", "grpc_package", "if_not_windows")
 load("//test/core/test_util:grpc_fuzzer.bzl", "grpc_fuzz_test")
 
 licenses(["notice"])
@@ -111,6 +111,46 @@ grpc_cc_test(
 )
 
 grpc_cc_test(
+    name = "uv_event_engine_factory_test",
+    srcs = ["uv_event_engine_factory_test.cc"],
+    external_deps = [
+        "absl/functional:any_invocable",
+        "absl/status",
+        "absl/status:statusor",
+        "absl/strings",
+        "absl/strings:string_view",
+        "absl/time",
+        "gtest",
+    ],
+    tags = ["no_test_ios"],
+    uses_event_engine = False,
+    uses_polling = False,
+    deps = [
+        "test_init",
+        "//:channel_arg_names",
+        "//:event_engine_base_hdrs",
+        "//:gpr",
+        "//:gpr_platform",
+        "//:grpc",
+        "//src/core:channel_args",
+        "//src/core:channel_args_endpoint_config",
+        "//src/core:default_event_engine",
+        "//src/core:env",
+        "//src/core:event_engine_extensions",
+        "//src/core:event_engine_memory_allocator_factory",
+        "//src/core:event_engine_query_extensions",
+        "//src/core:event_engine_tcp_socket_utils",
+        "//src/core:memory_quota",
+        "//src/core:notification",
+        "//src/core:resource_quota",
+        "//src/core:slice",
+        "//src/core:sync",
+        "//src/core:uv_event_engine",
+        "//test/core/test_util:grpc_test_util",
+    ] + if_not_windows(["//src/core:posix_event_engine"]),
+)
+
+grpc_cc_test(
     name = "slice_buffer_test",
     srcs = ["slice_buffer_test.cc"],
     external_deps = [
@@ -135,7 +175,29 @@ grpc_cc_library(
         "absl/status",
         "absl/strings",
     ],
-    deps = ["//:gpr"],
+    select_deps = [
+        {
+            "//:ios": [],
+            "//:tvos": [],
+            "//:visionos": [],
+            "//:watchos": [],
+            "//:windows": [],
+            "//conditions:default": ["//src/core:posix_event_engine"],
+        },
+        {
+            "//src/core:linux_android_crosstool": [],
+            "//:android": [],
+            "@platforms//os:linux": ["//src/core:uv_event_engine"],
+            "//:mac": ["//src/core:uv_event_engine"],
+            "//:windows": ["//src/core:uv_event_engine"],
+            "//conditions:default": [],
+        },
+    ],
+    deps = [
+        "//:event_engine_base_hdrs",
+        "//:gpr",
+        "//src/core:default_event_engine",
+    ],
 )
 
 grpc_cc_library(

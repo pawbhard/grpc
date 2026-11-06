@@ -44,6 +44,7 @@ bazel_dep(name = "apple_support", version = "1.19.0", repo_name = "build_bazel_a
 bazel_dep(name = "bazel_skylib", version = "1.8.1")
 bazel_dep(name = "boringssl", version = "0.20260929.0")
 bazel_dep(name = "c-ares", version = "1.19.1", repo_name = "com_github_cares_cares")
+bazel_dep(name = "libuv", version = "1.48.0.bcr.2", repo_name = "com_github_libuv_libuv")
 
 # -- CEL (Common Expression Language) C implementation.
 # Pinning version to be consistent with third_party/cel-c.
@@ -113,6 +114,27 @@ archive_override(
     urls = [
         "https://storage.googleapis.com/grpc-bazel-mirror/github.com/madler/zlib/archive/f1f503da85d52e56aae11557b4d79a42bcaa2b86.tar.gz",
         "https://github.com/madler/zlib/archive/f1f503da85d52e56aae11557b4d79a42bcaa2b86.tar.gz",
+    ],
+)
+
+# Override BCR libuv@1.48.0.bcr.2 with upstream v1.51.0 (pinned by SHA-256
+# integrity) for root-module builds so Linux SO_REUSEPORT (UV_TCP_REUSEPORT) and
+# 1.49.0-1.51.0 fixes are active. Note: Bazel Bzlmod ignores archive_override
+# when grpc is consumed as a non-root module, so uv_listener.cc guards
+# UV_TCP_REUSEPORT by UV_VERSION_HEX and falls back cleanly on libuv 1.48.x.
+# Once v1.51.0 is mirrored to grpc-bazel-mirror, prepend:
+# "https://storage.googleapis.com/grpc-bazel-mirror/github.com/libuv/libuv/archive/refs/tags/v1.51.0.tar.gz"
+archive_override(
+    module_name = "libuv",
+    integrity = "sha256-J+Vc9wg5E7+2gmynjN6d52R83tZI018kFj8tMbufUc0=",
+    patch_strip = 1,
+    patches = [
+        "//bazel/libuv:add_module_dot_bazel.patch",
+        "//bazel/libuv:add_custom_build_file.patch",
+    ],
+    strip_prefix = "libuv-1.51.0",
+    urls = [
+        "https://github.com/libuv/libuv/archive/refs/tags/v1.51.0.tar.gz",
     ],
 )
 

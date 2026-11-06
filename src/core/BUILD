@@ -83,11 +83,35 @@ config_setting(
     values = {"define": "grpc_no_filter_fusion=true"},
 )
 
+config_setting(
+    name = "linux_android_crosstool",
+    constraint_values = ["@platforms//os:linux"],
+    values = {"crosstool_top": "//external:android/crosstool"},
+)
+
 selects.config_setting_group(
     name = "grpc_no_filter_fusion",
     match_any = [
         ":grpc_no_filter_fusion_define",  # --define=grpc_no_filter_fusion=true
         "//:grpc_small_clients",
+    ],
+)
+
+config_setting(
+    name = "grpc_default_event_engine_uv_define",
+    values = {"define": "grpc_default_event_engine=uv"},
+)
+
+config_setting(
+    name = "grpc_default_event_engine_uv_upper_define",
+    values = {"define": "GRPC_DEFAULT_EVENT_ENGINE=uv"},
+)
+
+selects.config_setting_group(
+    name = "grpc_default_event_engine_uv",
+    match_any = [
+        ":grpc_default_event_engine_uv_define",  # --define=grpc_default_event_engine=uv
+        ":grpc_default_event_engine_uv_upper_define",  # --define=GRPC_DEFAULT_EVENT_ENGINE=uv
     ],
 )
 
@@ -3052,6 +3076,89 @@ grpc_cc_library(
 )
 
 grpc_cc_library(
+    name = "uv_event_engine",
+    srcs = [
+        "lib/event_engine/uv_engine/grpc_polled_fd_uv.cc",
+        "lib/event_engine/uv_engine/native_uv_dns_resolver.cc",
+        "lib/event_engine/uv_engine/uv_endpoint.cc",
+        "lib/event_engine/uv_engine/uv_engine.cc",
+        "lib/event_engine/uv_engine/uv_error_utils.cc",
+        "lib/event_engine/uv_engine/uv_listener.cc",
+        "lib/event_engine/uv_engine/uv_loop_worker.cc",
+    ],
+    hdrs = [
+        "lib/event_engine/uv_engine/grpc_polled_fd_uv.h",
+        "lib/event_engine/uv_engine/native_uv_dns_resolver.h",
+        "lib/event_engine/uv_engine/uv_endpoint.h",
+        "lib/event_engine/uv_engine/uv_engine.h",
+        "lib/event_engine/uv_engine/uv_error_utils.h",
+        "lib/event_engine/uv_engine/uv_listener.h",
+        "lib/event_engine/uv_engine/uv_loop_worker.h",
+    ],
+    defines = ["GRPC_HAS_UV_EVENT_ENGINE=1"],
+    external_deps = [
+        "absl/base:core_headers",
+        "absl/base:no_destructor",
+        "absl/cleanup",
+        "absl/container:flat_hash_map",
+        "absl/container:inlined_vector",
+        "absl/functional:any_invocable",
+        "absl/functional:function_ref",
+        "absl/log",
+        "absl/status",
+        "absl/status:statusor",
+        "absl/strings",
+        "absl/strings:str_format",
+        "absl/time",
+        "absl/types:span",
+        "libuv",
+        # "cares" must remain last: _get_external_deps() turns `ret` into a
+        # `select()` expression when processing "cares", so subsequent
+        # `ret.append(...)` calls in Starlark would fail.
+        "cares",
+    ],
+    deps = [
+        "address_sorting_init",
+        "ares_resolver",
+        "common_event_engine_closures",
+        "env",
+        "event_engine_common",
+        "event_engine_extensions",
+        "event_engine_query_extensions",
+        "event_engine_tcp_socket_utils",
+        "event_engine_thread_local",
+        "event_engine_thread_pool",
+        "event_engine_utils",
+        "experiments",
+        "grpc_check",
+        "iomgr_port",
+        "memory_quota",
+        "notification",
+        "posix_event_engine_base_hdrs",
+        "posix_event_engine_tcp_socket_utils",
+        "posix_event_engine_timer",
+        "posix_event_engine_timer_manager",
+        "ref_counted",
+        "ref_counted_dns_resolver_interface",
+        "resolved_address",
+        "resource_quota",
+        "slice",
+        "socket_mutator",
+        "strerror",
+        "sync",
+        "useful",
+        "//:channel_arg_names",
+        "//:event_engine_base_hdrs",
+        "//:gpr",
+        "//:gpr_platform",
+        "//:grpc_trace",
+        "//:orphanable",
+        "//:parse_address",
+        "//:ref_counted_ptr",
+    ],
+)
+
+grpc_cc_library(
     name = "windows_event_engine",
     srcs = ["lib/event_engine/windows/windows_engine.cc"],
     hdrs = ["lib/event_engine/windows/windows_engine.h"],
@@ -3301,7 +3408,15 @@ grpc_cc_library(
     name = "default_event_engine_factory",
     srcs = ["lib/event_engine/default_event_engine_factory.cc"],
     hdrs = ["lib/event_engine/default_event_engine_factory.h"],
-    external_deps = ["absl/memory"],
+    defines = select({
+        ":grpc_default_event_engine_uv": ["GRPC_DEFAULT_EVENT_ENGINE_UV=1"],
+        "//conditions:default": [],
+    }),
+    external_deps = [
+        "absl/log",
+        "absl/strings",
+        "absl/strings:string_view",
+    ],
     select_deps = [
         {
             "//:windows": ["windows_event_engine"],
@@ -3315,9 +3430,19 @@ grpc_cc_library(
             "//:watchos": ["cf_event_engine"],
             "//conditions:default": ["posix_event_engine"],
         },
+        {
+            ":linux_android_crosstool": [],
+            "//:android": [],
+            "@platforms//os:linux": ["uv_event_engine"],
+            "//:mac": ["uv_event_engine"],
+            "//:windows": ["uv_event_engine"],
+            "//conditions:default": [],
+        },
     ],
     deps = [
+        "env",
         "//:event_engine_base_hdrs",
+        "//:gpr",
         "//:gpr_platform",
     ],
 )

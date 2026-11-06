@@ -148,6 +148,22 @@ def grpc_deps():
             ],
         )
 
+    if "com_github_libuv_libuv" not in native.existing_rules():
+        # Once v1.51.0 is uploaded to grpc-bazel-mirror, prepend:
+        # "https://storage.googleapis.com/grpc-bazel-mirror/github.com/libuv/libuv/archive/refs/tags/v1.51.0.tar.gz"
+        http_archive(
+            name = "com_github_libuv_libuv",
+            patch_args = ["-p1"],
+            patches = [
+                "@com_github_grpc_grpc//bazel/libuv:add_custom_build_file.patch",
+            ],
+            sha256 = "27e55cf7083913bfb6826ca78cde9de7647cded648d35f24163f2d31bb9f51cd",
+            strip_prefix = "libuv-1.51.0",
+            urls = [
+                "https://github.com/libuv/libuv/archive/refs/tags/v1.51.0.tar.gz",
+            ],
+        )
+
     if "com_google_absl" not in native.existing_rules():
         http_archive(
             name = "com_google_absl",
