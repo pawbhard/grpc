@@ -156,11 +156,9 @@ absl::StatusOr<std::unique_ptr<AccessLogFilter>> AccessLogFilter::Create(
       filter_args.config().TakeAsSubclass<const Config>());
 }
 
-namespace {
-
-void CaptureHeaders(const grpc_metadata_batch& md,
-                    const std::set<std::string>& names,
-                    AccessLogCallData::HeaderMap* out) {
+void CaptureAccessLogHeaders(const grpc_metadata_batch& md,
+                             const std::set<std::string>& names,
+                             AccessLogCallData::HeaderMap* out) {
   for (const std::string& name : names) {
     std::string buffer;
     std::optional<absl::string_view> value = md.GetStringValue(name, &buffer);
@@ -168,8 +166,7 @@ void CaptureHeaders(const grpc_metadata_batch& md,
   }
 }
 
-// Converts a peer URI ("ipv4:1.2.3.4:5") to "ip:port".
-std::string PeerStringToAddress(absl::string_view peer) {
+std::string AccessLogPeerToAddress(absl::string_view peer) {
   absl::StatusOr<URI> uri = URI::Parse(peer);
   if (uri.ok() && (uri->scheme() == "ipv4" || uri->scheme() == "ipv6")) {
     return uri->path();
@@ -177,14 +174,33 @@ std::string PeerStringToAddress(absl::string_view peer) {
   return std::string(peer);
 }
 
-}  // namespace
+void WriteAccessLogRecords(const AccessLogFilter::Config& config,
+                           const AccessLogCallData& data) {
+  const absl::Time timestamp =
+      data.start_time == absl::InfinitePast() ? absl::Now() : data.start_time;
+  for (const AccessLogFilter::Logger& logger : config.loggers) {
+    if (logger.sink == nullptr || logger.sink->sink() == nullptr) continue;
+    AccessLogRecord record;
+    record.timestamp = timestamp;
+    if (logger.body.has_value()) {
+      record.body = EvaluateAccessLogValueTemplate(*logger.body, data);
+    }
+    record.attributes.reserve(logger.attributes.size());
+    for (const auto& [key, value] : logger.attributes) {
+      record.attributes.emplace_back(
+          key, EvaluateAccessLogValueTemplate(value, data));
+    }
+    logger.sink->sink()->Log(std::move(record));
+  }
+}
 
 void AccessLogFilter::Call::OnClientInitialMetadata(ClientMetadata& md,
                                                     AccessLogFilter* filter) {
   start_ = Timestamp::Now();
   data_.start_time = absl::Now();
   const Config& config = filter->config();
-  CaptureHeaders(md, config.header_names.request, &data_.request_headers);
+  CaptureAccessLogHeaders(md, config.header_names.request,
+                          &data_.request_headers);
   // Later filters can change the request headers.  If the chain has an
   // AccessLogRequestHeaderFilter, it captures them again through this
   // context.
@@ -195,21 +211,21 @@ void AccessLogFilter::Call::OnClientInitialMetadata(ClientMetadata& md,
     const Slice* peer = md.get_pointer(PeerString());
     if (peer != nullptr) {
       data_.downstream_remote_address =
-          PeerStringToAddress(peer->as_string_view());
+          AccessLogPeerToAddress(peer->as_string_view());
     }
   }
 }
 
 void AccessLogFilter::Call::OnServerInitialMetadata(ServerMetadata& md,
                                                     AccessLogFilter* filter) {
-  CaptureHeaders(md, filter->config().header_names.response,
-                 &data_.response_headers);
+  CaptureAccessLogHeaders(md, filter->config().header_names.response,
+                          &data_.response_headers);
 }
 
 void AccessLogFilter::Call::OnServerTrailingMetadata(ServerMetadata& md,
                                                      AccessLogFilter* filter) {
-  CaptureHeaders(md, filter->config().header_names.trailer,
-                 &data_.response_trailers);
+  CaptureAccessLogHeaders(md, filter->config().header_names.trailer,
+                          &data_.response_trailers);
   std::optional<grpc_status_code> status = md.get(GrpcStatusMetadata());
   if (status.has_value()) data_.grpc_status = *status;
   // The v3 call stack does not run OnFinalize(), so log here.
@@ -249,22 +265,7 @@ void AccessLogFilter::Call::MaybeLog(const Config& config,
     data_.bytes_received = client_to_server_bytes_;
     data_.bytes_sent = server_to_client_bytes_;
   }
-  const absl::Time timestamp =
-      data_.start_time == absl::InfinitePast() ? absl::Now() : data_.start_time;
-  for (const Logger& logger : config.loggers) {
-    if (logger.sink == nullptr || logger.sink->sink() == nullptr) continue;
-    AccessLogRecord record;
-    record.timestamp = timestamp;
-    if (logger.body.has_value()) {
-      record.body = EvaluateAccessLogValueTemplate(*logger.body, data_);
-    }
-    record.attributes.reserve(logger.attributes.size());
-    for (const auto& [key, value] : logger.attributes) {
-      record.attributes.emplace_back(
-          key, EvaluateAccessLogValueTemplate(value, data_));
-    }
-    logger.sink->sink()->Log(std::move(record));
-  }
+  WriteAccessLogRecords(config, data_);
 }
 
 //
@@ -309,8 +310,8 @@ void AccessLogRequestHeaderFilter::Call::OnClientInitialMetadata(
   // Replace the copy that AccessLogFilter made, so that the record also
   // shows headers that earlier filters removed.
   context->request_headers->clear();
-  CaptureHeaders(md, filter->config_->request_header_names,
-                 context->request_headers);
+  CaptureAccessLogHeaders(md, filter->config_->request_header_names,
+                          context->request_headers);
 }
 
 //

@@ -108,10 +108,16 @@ void RegisterBuiltins(CoreConfiguration::Builder* builder) {
     top_filter_server_virtual_reg.BeforeAll();
   }
 
+  // ServerCallTracerFilter goes before the config selector interceptor.
+  // So it also sees calls that fail in the config selector or in the
+  // selected xDS filter chain: their trailing metadata and their end.  A
+  // config selector can add a call tracer (for example, the access log
+  // tracer), and that tracer then gets these events too.
   auto& server_config_selector_interceptor_reg =
       builder->channel_init()
           ->RegisterFilter<ServerConfigSelectorInterceptor>(GRPC_SERVER_CHANNEL)
-          .IfHasChannelArg(ServerConfigSelectorProvider::ChannelArgName());
+          .IfHasChannelArg(ServerConfigSelectorProvider::ChannelArgName())
+          .Before<ServerCallTracerFilter>();
 
   if (IsFixV3FilterStackServerSideOrderingEnabled()) {
     server_config_selector_interceptor_reg.Before(

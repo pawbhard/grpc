@@ -41,6 +41,8 @@
 #include "src/core/credentials/transport/tls/grpc_tls_certificate_provider.h"
 #include "src/core/credentials/transport/transport_credentials.h"
 #include "src/core/credentials/transport/xds/xds_credentials.h"
+#include "src/core/filter/access_log/access_log_call_tracer.h"
+#include "src/core/filter/access_log/access_log_filter.h"
 #include "src/core/lib/address_utils/parse_address.h"
 #include "src/core/lib/address_utils/sockaddr_utils.h"
 #include "src/core/lib/channel/channel_args.h"
@@ -443,22 +445,13 @@ class XdsServerConfigFetcher::ListenerWatcher::XdsConnectionManager::
     absl::flat_hash_map<const VirtualHost::Route*,
                         absl::StatusOr<RefCountedPtr<const FilterChain>>>
         filter_chains;
-    // The chain for calls that fail route selection.  Null if the HCM
-    // has no access log.
-    absl::StatusOr<RefCountedPtr<const FilterChain>> failure_filter_chain =
-        nullptr;
   };
-
-  // Returns the route failure chain, after it stores status in the call
-  // arena.  Returns status if there is no route failure chain.
-  static absl::StatusOr<RefCountedPtr<const FilterChain>> RouteFailure(
-      const ConnectionState* state, absl::Status status);
 
   std::shared_ptr<const XdsRouteConfigResource> route_config_;
   std::vector<VirtualHost> virtual_hosts_;
-  // The filters of the route failure chain.  Null if the HCM has no
-  // access log.
-  RefCountedPtr<const FilterList> failure_filter_list_;
+  // The logger config for the access log call tracer.  Null if the HCM
+  // has no access log.
+  RefCountedPtr<const AccessLogFilter::Config> access_logger_config_;
 };
 
 //
@@ -480,8 +473,8 @@ void XdsServerConfigFetcher::StartWatch(
       [self = RefAsSubclass<XdsServerConfigFetcher>(),
        listening_address = std::move(listening_address),
        watcher = std::move(watcher)]()
-          ABSL_EXCLUSIVE_LOCKS_REQUIRED(
-              &FetcherState::work_serializer) mutable {
+          ABSL_EXCLUSIVE_LOCKS_REQUIRED(&FetcherState::
+                                            work_serializer) mutable {
             ServerConfigFetcher::WatcherInterface* watcher_ptr = watcher.get();
             auto listener_watcher = MakeRefCounted<ListenerWatcher>(
                 self->fetcher_state_.Ref(DEBUG_LOCATION, "ListenerWatcher"),
@@ -562,8 +555,8 @@ void XdsServerConfigFetcher::ListenerWatcher::OnResourceChanged(
   fetcher_state_->work_serializer.Run(
       [self = RefAsSubclass<ListenerWatcher>(), listener = std::move(listener),
        read_delay_handle = std::move(read_delay_handle)]()
-          ABSL_EXCLUSIVE_LOCKS_REQUIRED(
-              &FetcherState::work_serializer) mutable {
+          ABSL_EXCLUSIVE_LOCKS_REQUIRED(&FetcherState::
+                                            work_serializer) mutable {
             if (!listener.ok()) {
               self->OnFatalError(AddMessagePrefix(
                   absl::StrCat("LDS resource ", self->ResourceName()),
@@ -998,8 +991,8 @@ class XdsServerConfigFetcher::ListenerWatcher::XdsConnectionManager::
     fetcher_state_->work_serializer.Run(
         [self = WeakRefAsSubclass<XdsServerConfigSelectorProvider>(),
          watcher = std::move(watcher)]()
-            ABSL_EXCLUSIVE_LOCKS_REQUIRED(
-                &FetcherState::work_serializer) mutable {
+            ABSL_EXCLUSIVE_LOCKS_REQUIRED(&FetcherState::
+                                              work_serializer) mutable {
               watcher->OnServerConfigSelectorUpdate(self->config_selector_);
               self->watchers_.insert(std::move(watcher));
             });
@@ -1048,8 +1041,8 @@ class XdsServerConfigFetcher::ListenerWatcher::XdsConnectionManager::
         [l4_filter_chain = l4_filter_chain_,
          route_config = std::move(route_config),
          read_delay_handle = std::move(read_delay_handle)]()
-            ABSL_EXCLUSIVE_LOCKS_REQUIRED(
-                &FetcherState::work_serializer) mutable {
+            ABSL_EXCLUSIVE_LOCKS_REQUIRED(&FetcherState::
+                                              work_serializer) mutable {
               l4_filter_chain->OnRouteConfigChanged(std::move(route_config));
             });
   }
@@ -1060,8 +1053,8 @@ class XdsServerConfigFetcher::ListenerWatcher::XdsConnectionManager::
     l4_filter_chain_->fetcher_state_->work_serializer.Run(
         [l4_filter_chain = l4_filter_chain_, status = std::move(status),
          read_delay_handle = std::move(read_delay_handle)]()
-            ABSL_EXCLUSIVE_LOCKS_REQUIRED(
-                &FetcherState::work_serializer) mutable {
+            ABSL_EXCLUSIVE_LOCKS_REQUIRED(&FetcherState::
+                                              work_serializer) mutable {
               l4_filter_chain->OnAmbientError(std::move(status));
             });
   }
@@ -1263,9 +1256,12 @@ XdsServerConfigFetcher::ListenerWatcher::XdsConnectionManager::L4FilterChain::
         Blackboard& blackboard) {
   auto config_selector = MakeRefCounted<XdsServerConfigSelector>();
   FilterListBuilder filter_list_builder;
+  // The builder adds the request header filter if the access log reads
+  // request headers.  ServerCallTracerFilter sees the headers before the
+  // xDS HTTP filters ran, so the tracer cannot capture the final headers.
   XdsRouting::RouteConfigFilterChainBuilder route_config_builder(
       http_filters, http_filter_registry, filter_list_builder,
-      transport_factory, blackboard, std::move(access_log_config));
+      transport_factory, blackboard, access_log_config);
   for (auto& vhost : route_config->virtual_hosts) {
     auto vhost_builder =
         route_config_builder.MakeVirtualHostFilterChainBuilder(vhost);
@@ -1283,15 +1279,10 @@ XdsServerConfigFetcher::ListenerWatcher::XdsConnectionManager::L4FilterChain::
           filter_list->TakeAsSubclass<const FilterList>();
     }
   }
-  // Calls that fail route selection use this chain, so that they are
-  // logged.
-  auto failure_filter_list =
-      route_config_builder.BuildRouteFailureFilterChain();
-  if (!failure_filter_list.ok()) return failure_filter_list.status();
-  if (*failure_filter_list != nullptr) {
-    config_selector->failure_filter_list_ =
-        failure_filter_list->TakeAsSubclass<const FilterList>();
-  }
+  // The access log is a call tracer, not a filter.  Build the logger
+  // config here, with the sinks, so that calls do not create sinks.
+  config_selector->access_logger_config_ = XdsRouting::MakeAccessLoggerConfig(
+      std::move(access_log_config), transport_factory, blackboard);
   config_selector->route_config_ = std::move(route_config);
   return config_selector;
 }
@@ -1322,12 +1313,6 @@ XdsServerConfigFetcher::ListenerWatcher::XdsConnectionManager::L4FilterChain::
       connection_state->filter_chains.emplace(&route, std::move(filter_chain));
     }
   }
-  if (failure_filter_list_ != nullptr) {
-    for (const auto& [factory, config] : failure_filter_list_->filters) {
-      factory->AddFilter(builder, config);
-    }
-    connection_state->failure_filter_chain = builder.Build();
-  }
   return connection_state;
 }
 
@@ -1345,24 +1330,33 @@ XdsServerConfigFetcher::ListenerWatcher::XdsConnectionManager::L4FilterChain::
   }
   absl::string_view authority =
       metadata->get_pointer(HttpAuthorityMetadata())->as_string_view();
+  // If the HCM has an access log, add the access log call tracer before
+  // route selection.  So a call that fails route selection also writes a
+  // record.
+  if (access_logger_config_ != nullptr) {
+    Arena* arena = MaybeGetContext<Arena>();
+    if (arena != nullptr) {
+      AccessLogServerCallTracer::AddToCall(arena, access_logger_config_,
+                                           *metadata);
+    }
+  }
   auto vhost_index = XdsRouting::FindVirtualHostForDomain(
       VirtualHostListIterator(virtual_hosts_), authority);
   if (!vhost_index.has_value()) {
-    return RouteFailure(state, absl::UnavailableError(absl::StrCat(
-                                   "could not find VirtualHost for ", authority,
-                                   " in RouteConfiguration")));
+    return absl::UnavailableError(
+        absl::StrCat("could not find VirtualHost for ", authority,
+                     " in RouteConfiguration"));
   }
   auto& virtual_host = virtual_hosts_[vhost_index.value()];
   auto route_index = XdsRouting::GetRouteForRequest(
       VirtualHost::RouteListIterator(virtual_host.routes), path, metadata);
   if (!route_index.has_value()) {
-    return RouteFailure(state, absl::UnavailableError("no route matched"));
+    return absl::UnavailableError("no route matched");
   }
   auto& route = virtual_host.routes[*route_index];
   // Found the matching route
   if (route.unsupported_action) {
-    return RouteFailure(
-        state, absl::UnavailableError("matching route has unsupported action"));
+    return absl::UnavailableError("matching route has unsupported action");
   }
   // Find filter chain.
   const auto& filter_chains =
@@ -1373,24 +1367,6 @@ XdsServerConfigFetcher::ListenerWatcher::XdsConnectionManager::L4FilterChain::
     return absl::InternalError("no filter chain found for route");
   }
   return it->second;
-}
-
-absl::StatusOr<RefCountedPtr<const FilterChain>>
-XdsServerConfigFetcher::ListenerWatcher::XdsConnectionManager::L4FilterChain::
-    XdsServerConfigSelector::RouteFailure(const ConnectionState* state,
-                                          absl::Status status) {
-  const auto& failure_filter_chain =
-      DownCast<const XdsConnectionState*>(state)->failure_filter_chain;
-  if (!failure_filter_chain.ok() || *failure_filter_chain == nullptr) {
-    return status;
-  }
-  Arena* arena = MaybeGetContext<Arena>();
-  if (arena == nullptr) return status;
-  // ServerConfigSelectorInterceptor sends this status when GetCallConfig()
-  // fails.  Send the same status from the route failure chain.
-  XdsRouting::SetRouteFailureStatus(
-      arena, absl::UnavailableError(StatusToString(status)));
-  return failure_filter_chain;
 }
 
 }  // namespace

@@ -298,6 +298,12 @@ class DelegatingClientCallTracer : public ClientCallTracerInterface {
         std::move(attempt_tracers));
   }
 
+  void RecordEnd(grpc_status_code status_code,
+                 absl::string_view error_string) override {
+    for (auto* tracer : tracers_) {
+      tracer->RecordEnd(status_code, error_string);
+    }
+  }
   void RecordAnnotation(absl::string_view annotation) override {
     for (auto* tracer : tracers_) {
       tracer->RecordAnnotation(annotation);
@@ -507,6 +513,46 @@ void SetServerCallTracer(Arena* arena,
       arena->SetContext<CallTracer>(wrapper);
       break;
   }
+}
+
+void AddClientCallTracerToContext(Arena* arena,
+                                  ClientCallTracerInterface* tracer) {
+  CallSpan* span = arena->GetContext<CallSpan>();
+  if (span == nullptr) {
+    arena->SetContext<CallSpan>(WrapClientCallTracer(tracer, arena));
+    return;
+  }
+  // The call-level context holds a client call tracer, so the cast is safe.
+  auto* existing = static_cast<ClientCallTracerInterface*>(span->span_impl());
+  if (existing->IsDelegatingTracer()) {
+    static_cast<DelegatingClientCallTracer*>(existing)->AddTracer(tracer);
+    return;
+  }
+  auto* delegating_tracer =
+      arena->ManagedNew<DelegatingClientCallTracer>(existing);
+  delegating_tracer->AddTracer(tracer);
+  arena->SetContext<CallSpan>(WrapClientCallTracer(delegating_tracer, arena));
+}
+
+void AddServerCallTracerToContext(Arena* arena,
+                                  ServerCallTracerInterface* tracer) {
+  CallSpan* span = arena->GetContext<CallSpan>();
+  ServerCallTracerInterface* to_set = tracer;
+  if (span != nullptr) {
+    // The server context holds a server call tracer, so the cast is safe.
+    auto* existing = static_cast<ServerCallTracerInterface*>(span->span_impl());
+    if (existing->IsDelegatingTracer()) {
+      static_cast<DelegatingServerCallTracer*>(existing)->AddTracer(tracer);
+      return;
+    }
+    auto* delegating_tracer =
+        arena->ManagedNew<DelegatingServerCallTracer>(existing);
+    delegating_tracer->AddTracer(tracer);
+    to_set = delegating_tracer;
+  }
+  auto* wrapper = WrapServerCallTracer(to_set, arena);
+  arena->SetContext<CallSpan>(wrapper);
+  arena->SetContext<CallTracer>(wrapper);
 }
 
 }  // namespace grpc_core

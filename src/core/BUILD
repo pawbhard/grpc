@@ -4526,6 +4526,7 @@ grpc_cc_library(
         "observable",
         "status_helper",
         "sync",
+        "//:call_tracer",
         "//:gpr",
         "//:grpc_base",
         "//:promise",
@@ -5954,6 +5955,36 @@ grpc_cc_library(
         "//:grpc_base",
         "//:ref_counted_ptr",
         "//:uri",
+    ],
+)
+
+grpc_cc_library(
+    name = "access_log_call_tracer",
+    srcs = [
+        "filter/access_log/access_log_call_tracer.cc",
+    ],
+    hdrs = [
+        "filter/access_log/access_log_call_tracer.h",
+    ],
+    external_deps = [
+        "absl/base:core_headers",
+        "absl/strings",
+        "absl/time",
+    ],
+    deps = [
+        "access_log_filter",
+        "access_log_formatter",
+        "arena",
+        "call_final_info",
+        "message",
+        "metadata_batch",
+        "sync",
+        "time",
+        "//:call_tracer",
+        "//:gpr",
+        "//:grpc_base",
+        "//:grpc_status",
+        "//:ref_counted_ptr",
     ],
 )
 
@@ -7894,6 +7925,8 @@ grpc_cc_library(
         "absl/strings",
     ],
     deps = [
+        "access_log_call_tracer",
+        "access_log_filter",
         "arena",
         "blackboard",
         "channel_args",
@@ -9273,6 +9306,8 @@ grpc_cc_library(
         "re2",
     ],
     deps = [
+        "access_log_call_tracer",
+        "access_log_filter",
         "arena",
         "arena_promise",
         "blackboard",

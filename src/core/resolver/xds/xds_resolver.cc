@@ -38,6 +38,8 @@
 #include "src/core/client_channel/client_channel_internal.h"
 #include "src/core/client_channel/config_selector.h"
 #include "src/core/config/core_configuration.h"
+#include "src/core/filter/access_log/access_log_call_tracer.h"
+#include "src/core/filter/access_log/access_log_filter.h"
 #include "src/core/lib/channel/channel_args.h"
 #include "src/core/lib/channel/channel_fwd.h"
 #include "src/core/lib/channel/channel_stack.h"
@@ -224,11 +226,11 @@ class XdsResolver final : public Resolver {
                            XdsTransportFactory& transport_factory,
                            Blackboard& blackboard);
 
-    // The chain for calls that fail route selection.  Null if the HCM has
-    // no access log.
-    const absl::StatusOr<RefCountedPtr<const FilterChain>>&
-    failure_filter_chain() const {
-      return failure_filter_chain_;
+    // The logger config for the access log call tracer.  Null if the HCM
+    // has no access log.
+    const RefCountedPtr<const AccessLogFilter::Config>& access_logger_config()
+        const {
+      return access_logger_config_;
     }
 
    private:
@@ -243,8 +245,7 @@ class XdsResolver final : public Resolver {
 
     std::map<absl::string_view, RefCountedPtr<ClusterRef>> clusters_;
     std::vector<RouteEntry> routes_;
-    absl::StatusOr<RefCountedPtr<const FilterChain>> failure_filter_chain_ =
-        nullptr;
+    RefCountedPtr<const AccessLogFilter::Config> access_logger_config_;
   };
 
   class XdsConfigSelector final : public ConfigSelector {
@@ -462,7 +463,7 @@ void XdsResolver::RouteConfigData::BuildFilterChains(
   FilterChainBuilderWrapper builder_wrapper(builder);
   XdsRouting::RouteConfigFilterChainBuilder route_config_builder(
       hcm.http_filters, http_filter_registry, builder_wrapper,
-      transport_factory, blackboard, hcm.access_log_config);
+      transport_factory, blackboard);
   auto vhost_builder = route_config_builder.MakeVirtualHostFilterChainBuilder(
       *xds_config.virtual_host);
   // Set the filter chain for each route.
@@ -494,10 +495,10 @@ void XdsResolver::RouteConfigData::BuildFilterChains(
           vhost_builder.BuildFilterChainForRoute(route_entry.route);
     }
   }
-  // Calls that fail route selection use this chain, so that they are
-  // logged.  The builder wrapper adds ClusterSelectionFilter at the end,
-  // but the route failure filter fails the call before it gets there.
-  failure_filter_chain_ = route_config_builder.BuildRouteFailureFilterChain();
+  // The access log is a call tracer, not a filter.  Build the logger
+  // config here, with the sinks, so that calls do not create sinks.
+  access_logger_config_ = XdsRouting::MakeAccessLoggerConfig(
+      hcm.access_log_config, transport_factory, blackboard);
 }
 
 absl::StatusOr<RefCountedPtr<ServiceConfig>>
@@ -682,32 +683,26 @@ absl::StatusOr<RefCountedPtr<const FilterChain>>
 XdsResolver::XdsConfigSelector::GetCallConfig(GetCallConfigArgs args) {
   Slice* path = args.initial_metadata->get_pointer(HttpPathMetadata());
   GRPC_CHECK_NE(path, nullptr);
-  // If the HCM has an access log, a call that fails route selection uses
-  // the route failure chain, so that it is logged.  The chain fails the
-  // call with the same status.  No service config or cluster is set.
-  auto route_failure = [&](absl::Status status)
-      -> absl::StatusOr<RefCountedPtr<const FilterChain>> {
-    const auto& failure_filter_chain =
-        route_config_data_->failure_filter_chain();
-    if (!failure_filter_chain.ok() || *failure_filter_chain == nullptr) {
-      return status;
-    }
-    XdsRouting::SetRouteFailureStatus(args.arena, std::move(status));
-    return failure_filter_chain;
-  };
+  // If the HCM has an access log, add the access log call tracer before
+  // route selection.  So a call that fails route selection also writes a
+  // record: the surface calls RecordEnd() for each call.
+  if (route_config_data_->access_logger_config() != nullptr) {
+    AccessLogClientCallTracer::AddToCall(
+        args.arena, route_config_data_->access_logger_config(),
+        *args.initial_metadata);
+  }
   auto* entry = route_config_data_->GetRouteForRequest(path->as_string_view(),
                                                        args.initial_metadata);
   if (entry == nullptr) {
-    return route_failure(
-        absl::UnavailableError("No matching route found in xDS route config"));
+    return absl::UnavailableError(
+        "No matching route found in xDS route config");
   }
   // Found a route match
   const auto* route_action =
       std::get_if<XdsRouteConfigResource::Route::RouteAction>(
           &entry->route.action);
   if (route_action == nullptr) {
-    return route_failure(
-        absl::UnavailableError("Matching route has inappropriate action"));
+    return absl::UnavailableError("Matching route has inappropriate action");
   }
   std::string cluster_name;
   absl::StatusOr<RefCountedPtr<const FilterChain>> filter_chain;

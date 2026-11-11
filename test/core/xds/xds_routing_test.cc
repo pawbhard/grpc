@@ -841,25 +841,20 @@ class XdsAccessLogInjectionTest : public XdsRouteConfigFilterChainBuilderTest {
   std::shared_ptr<CountingSinkFactory> sink_factory_;
 };
 
-MATCHER(IsAccessLogFilter, "") {
-  if (arg.first != XdsAccessLogFilterFactory::Get()) {
-    *result_listener << "not the access log filter factory";
+MATCHER(IsLoggerConfigWithSink, "") {
+  if (arg == nullptr) {
+    *result_listener << "null logger config";
     return false;
   }
-  if (arg.second == nullptr ||
-      arg.second->type() != AccessLogFilter::Config::Type()) {
-    *result_listener << "wrong config type";
-    return false;
-  }
-  const auto& config = DownCast<const AccessLogFilter::Config&>(*arg.second);
-  if (config.loggers.size() != 1 || config.loggers[0].sink == nullptr) {
+  if (arg->loggers.size() != 1 || arg->loggers[0].sink == nullptr) {
     *result_listener << "expected one logger with a sink";
     return false;
   }
   return true;
 }
 
-TEST_F(XdsAccessLogInjectionTest, AccessLogFilterIsFirst) {
+// The access log is a call tracer, so the chain gets no access log filter.
+TEST_F(XdsAccessLogInjectionTest, NoAccessLogFilterInChain) {
   std::vector<XdsListenerResource::HttpConnectionManager::HttpFilter>
       hcm_filters = {MakeHcmFilter("filter1", "hcm")};
   XdsRouting::RouteConfigFilterChainBuilder route_config_builder(
@@ -870,61 +865,44 @@ TEST_F(XdsAccessLogInjectionTest, AccessLogFilterIsFirst) {
       route_config_builder.MakeVirtualHostFilterChainBuilder(vhost);
   auto route = MakeRoute();
   auto filter_chain = vhost_builder.BuildFilterChainForRoute(route);
-  EXPECT_THAT(filter_chain, IsFilterChain(::testing::ElementsAre(
-                                IsAccessLogFilter(),
-                                IsFilterAndConfig(GetTestXdsHttpFilterFactory(),
-                                                  "hcm/blackboard{hcm}"))));
+  EXPECT_THAT(filter_chain,
+              IsFilterChain(::testing::ElementsAre(IsFilterAndConfig(
+                  GetTestXdsHttpFilterFactory(), "hcm/blackboard{hcm}"))));
+  EXPECT_EQ(sink_factory_->num_sinks_created, 0);
+}
+
+TEST_F(XdsAccessLogInjectionTest, MakeAccessLoggerConfig) {
+  auto config = XdsRouting::MakeAccessLoggerConfig(
+      MakeAccessLogConfig(), *transport_factory_, *blackboard_);
+  EXPECT_THAT(config, IsLoggerConfigWithSink());
   EXPECT_EQ(sink_factory_->num_sinks_created, 1);
   EXPECT_EQ(sink_factory_->last_log_name, "access");
 }
 
-TEST_F(XdsAccessLogInjectionTest, SinkSharedAcrossChains) {
-  std::vector<XdsListenerResource::HttpConnectionManager::HttpFilter>
-      hcm_filters = {MakeHcmFilter("filter1", "hcm")};
-  XdsRouting::RouteConfigFilterChainBuilder route_config_builder(
-      hcm_filters, registry_, builder_, *transport_factory_, *blackboard_,
-      MakeAccessLogConfig());
-  auto vhost = MakeVirtualHost();
-  auto vhost_builder =
-      route_config_builder.MakeVirtualHostFilterChainBuilder(vhost);
-  // Routes with overrides get their own chains.
-  auto route1 = MakeRoute({{"filter1", MakeOverride("route1")}});
-  auto route2 = MakeRoute({{"filter1", MakeOverride("route2")}});
-  auto chain1 = vhost_builder.BuildFilterChainForRoute(route1);
-  auto chain2 = vhost_builder.BuildFilterChainForRoute(route2);
-  ASSERT_TRUE(chain1.ok());
-  ASSERT_TRUE(chain2.ok());
-  const auto& filters1 = DownCast<const FakeFilterChain&>(**chain1).filters;
-  const auto& filters2 = DownCast<const FakeFilterChain&>(**chain2).filters;
-  ASSERT_EQ(filters1.size(), 2u);
-  ASSERT_EQ(filters2.size(), 2u);
-  const auto& config1 =
-      DownCast<const AccessLogFilter::Config&>(*filters1[0].second);
-  const auto& config2 =
-      DownCast<const AccessLogFilter::Config&>(*filters2[0].second);
-  EXPECT_EQ(config1.loggers[0].sink, config2.loggers[0].sink);
+// A new config (for example, after an LDS update) reuses the sink from the
+// Blackboard while the old config holds it.
+TEST_F(XdsAccessLogInjectionTest, MakeAccessLoggerConfigSharesSink) {
+  auto config1 = XdsRouting::MakeAccessLoggerConfig(
+      MakeAccessLogConfig(), *transport_factory_, *blackboard_);
+  auto config2 = XdsRouting::MakeAccessLoggerConfig(
+      MakeAccessLogConfig(), *transport_factory_, *blackboard_);
+  ASSERT_THAT(config1, IsLoggerConfigWithSink());
+  ASSERT_THAT(config2, IsLoggerConfigWithSink());
+  EXPECT_EQ(config1->loggers[0].sink, config2->loggers[0].sink);
   EXPECT_EQ(sink_factory_->num_sinks_created, 1);
 }
 
-TEST_F(XdsAccessLogInjectionTest, NoSinkFactoryGivesEmptyLoggerList) {
+TEST_F(XdsAccessLogInjectionTest, MakeAccessLoggerConfigNullInput) {
+  EXPECT_EQ(XdsRouting::MakeAccessLoggerConfig(nullptr, *transport_factory_,
+                                               *blackboard_),
+            nullptr);
+}
+
+TEST_F(XdsAccessLogInjectionTest, MakeAccessLoggerConfigNoSinkFactory) {
   SetOtelAccessLogSinkFactory(nullptr);
-  std::vector<XdsListenerResource::HttpConnectionManager::HttpFilter>
-      hcm_filters = {MakeHcmFilter("filter1", "hcm")};
-  XdsRouting::RouteConfigFilterChainBuilder route_config_builder(
-      hcm_filters, registry_, builder_, *transport_factory_, *blackboard_,
-      MakeAccessLogConfig());
-  auto vhost = MakeVirtualHost();
-  auto vhost_builder =
-      route_config_builder.MakeVirtualHostFilterChainBuilder(vhost);
-  auto route = MakeRoute();
-  auto filter_chain = vhost_builder.BuildFilterChainForRoute(route);
-  ASSERT_TRUE(filter_chain.ok());
-  const auto& filters =
-      DownCast<const FakeFilterChain&>(**filter_chain).filters;
-  ASSERT_EQ(filters.size(), 2u);
-  EXPECT_EQ(filters[0].first, XdsAccessLogFilterFactory::Get());
-  EXPECT_TRUE(DownCast<const AccessLogFilter::Config&>(*filters[0].second)
-                  .loggers.empty());
+  EXPECT_EQ(XdsRouting::MakeAccessLoggerConfig(
+                MakeAccessLogConfig(), *transport_factory_, *blackboard_),
+            nullptr);
 }
 
 // Breaks the XdsTransportFactory contract on purpose, to check that the
@@ -942,22 +920,9 @@ class NullXdsTransportFactory final : public XdsTransportFactory {
 
 TEST_F(XdsAccessLogInjectionTest, NullTransportDropsLogger) {
   auto null_transport_factory = MakeRefCounted<NullXdsTransportFactory>();
-  std::vector<XdsListenerResource::HttpConnectionManager::HttpFilter>
-      hcm_filters = {MakeHcmFilter("filter1", "hcm")};
-  XdsRouting::RouteConfigFilterChainBuilder route_config_builder(
-      hcm_filters, registry_, builder_, *null_transport_factory, *blackboard_,
-      MakeAccessLogConfig());
-  auto vhost = MakeVirtualHost();
-  auto vhost_builder =
-      route_config_builder.MakeVirtualHostFilterChainBuilder(vhost);
-  auto route = MakeRoute();
-  auto filter_chain = vhost_builder.BuildFilterChainForRoute(route);
-  ASSERT_TRUE(filter_chain.ok());
-  const auto& filters =
-      DownCast<const FakeFilterChain&>(**filter_chain).filters;
-  ASSERT_EQ(filters.size(), 2u);
-  EXPECT_TRUE(DownCast<const AccessLogFilter::Config&>(*filters[0].second)
-                  .loggers.empty());
+  EXPECT_EQ(XdsRouting::MakeAccessLoggerConfig(
+                MakeAccessLogConfig(), *null_transport_factory, *blackboard_),
+            nullptr);
   EXPECT_EQ(sink_factory_->num_sinks_created, 0);
 }
 
@@ -1045,15 +1010,14 @@ TEST_F(XdsAccessLogInjectionTest, RequestHeaderFilterGoesBeforeTerminal) {
   ASSERT_TRUE(filter_chain.ok()) << filter_chain.status();
   const auto& filters =
       DownCast<const FakeFilterChain&>(**filter_chain).filters;
-  ASSERT_EQ(filters.size(), 4u);
-  EXPECT_THAT(filters[0], IsAccessLogFilter());
-  EXPECT_THAT(filters[1], IsFilterAndConfig(GetTestXdsHttpFilterFactory(),
+  ASSERT_EQ(filters.size(), 3u);
+  EXPECT_THAT(filters[0], IsFilterAndConfig(GetTestXdsHttpFilterFactory(),
                                             "hcm/blackboard{hcm}"));
-  EXPECT_THAT(filters[2], IsRequestHeaderFilter(::testing::UnorderedElementsAre(
+  EXPECT_THAT(filters[1], IsRequestHeaderFilter(::testing::UnorderedElementsAre(
                               ":path", "x-user")));
-  EXPECT_EQ(filters[3].first, terminal_factory);
-  // The request header filter does not create a second sink.
-  EXPECT_EQ(sink_factory_->num_sinks_created, 1);
+  EXPECT_EQ(filters[2].first, terminal_factory);
+  // The request header filter creates no sink.
+  EXPECT_EQ(sink_factory_->num_sinks_created, 0);
 }
 
 TEST_F(XdsAccessLogInjectionTest, RequestHeaderFilterInEveryChain) {
@@ -1070,7 +1034,6 @@ TEST_F(XdsAccessLogInjectionTest, RequestHeaderFilterInEveryChain) {
   EXPECT_THAT(
       filter_chain,
       IsFilterChain(::testing::ElementsAre(
-          IsAccessLogFilter(),
           IsFilterAndConfig(GetTestXdsHttpFilterFactory(),
                             "hcm+vhost+route/blackboard{hcm+vhost+route}"),
           IsRequestHeaderFilter(::testing::UnorderedElementsAre("x-user")))));
@@ -1087,10 +1050,9 @@ TEST_F(XdsAccessLogInjectionTest, NoRequestHeaderFilterWithoutRequestHeaders) {
       route_config_builder.MakeVirtualHostFilterChainBuilder(vhost);
   auto route = MakeRoute();
   auto filter_chain = vhost_builder.BuildFilterChainForRoute(route);
-  EXPECT_THAT(filter_chain, IsFilterChain(::testing::ElementsAre(
-                                IsAccessLogFilter(),
-                                IsFilterAndConfig(GetTestXdsHttpFilterFactory(),
-                                                  "hcm/blackboard{hcm}"))));
+  EXPECT_THAT(filter_chain,
+              IsFilterChain(::testing::ElementsAre(IsFilterAndConfig(
+                  GetTestXdsHttpFilterFactory(), "hcm/blackboard{hcm}"))));
 }
 
 TEST_F(XdsAccessLogInjectionTest, NoSinkFactoryGivesNoRequestHeaderFilter) {
@@ -1110,97 +1072,9 @@ TEST_F(XdsAccessLogInjectionTest, NoSinkFactoryGivesNoRequestHeaderFilter) {
       DownCast<const FakeFilterChain&>(**filter_chain).filters;
   // The fake builder records each entry, but the request header factory
   // gets no config, so its AddFilter() adds no filter to a real chain.
-  ASSERT_EQ(filters.size(), 3u);
-  EXPECT_EQ(filters[2].first, XdsAccessLogRequestHeaderFilterFactory::Get());
-  EXPECT_EQ(filters[2].second, nullptr);
-}
-
-//
-// Route failure chain
-//
-
-MATCHER(IsRouteFailureFilter, "") {
-  if (arg.first != XdsRouteFailureFilterFactory::Get()) {
-    *result_listener << "not the route failure filter factory";
-    return false;
-  }
-  if (arg.second != nullptr) {
-    *result_listener << "unexpected config";
-    return false;
-  }
-  return true;
-}
-
-TEST_F(XdsAccessLogInjectionTest,
-       RouteFailureChainHasAccessLogAndFailureFilter) {
-  std::vector<XdsListenerResource::HttpConnectionManager::HttpFilter>
-      hcm_filters = {MakeHcmFilter("filter1", "hcm")};
-  XdsRouting::RouteConfigFilterChainBuilder route_config_builder(
-      hcm_filters, registry_, builder_, *transport_factory_, *blackboard_,
-      MakeAccessLogConfig());
-  auto vhost = MakeVirtualHost();
-  auto vhost_builder =
-      route_config_builder.MakeVirtualHostFilterChainBuilder(vhost);
-  auto route = MakeRoute();
-  auto route_chain = vhost_builder.BuildFilterChainForRoute(route);
-  ASSERT_TRUE(route_chain.ok()) << route_chain.status();
-  auto failure_chain = route_config_builder.BuildRouteFailureFilterChain();
-  EXPECT_THAT(failure_chain, IsFilterChain(::testing::ElementsAre(
-                                 IsAccessLogFilter(), IsRouteFailureFilter())));
-  // The route chain and the route failure chain share one sink.
-  ASSERT_TRUE(failure_chain.ok());
-  const auto& route_filters =
-      DownCast<const FakeFilterChain&>(**route_chain).filters;
-  const auto& failure_filters =
-      DownCast<const FakeFilterChain&>(**failure_chain).filters;
-  EXPECT_EQ(DownCast<const AccessLogFilter::Config&>(*route_filters[0].second)
-                .loggers[0]
-                .sink,
-            DownCast<const AccessLogFilter::Config&>(*failure_filters[0].second)
-                .loggers[0]
-                .sink);
-  EXPECT_EQ(sink_factory_->num_sinks_created, 1);
-}
-
-// The call does not reach a route, so the HCM filters, the terminal
-// filter and the request header filter are not in the chain.
-TEST_F(XdsAccessLogInjectionTest, RouteFailureChainSkipsOtherFilters) {
-  registry_.RegisterFilter(std::make_unique<TestTerminalFilterFactory>());
-  XdsListenerResource::HttpConnectionManager::HttpFilter router;
-  router.name = "router";
-  router.config_proto_type = TestTerminalFilterFactory::kConfigProtoName;
-  std::vector<XdsListenerResource::HttpConnectionManager::HttpFilter>
-      hcm_filters = {MakeHcmFilter("filter1", "hcm"), router};
-  XdsRouting::RouteConfigFilterChainBuilder route_config_builder(
-      hcm_filters, registry_, builder_, *transport_factory_, *blackboard_,
-      MakeAccessLogConfigWithBody("%REQ(x-user)% %GRPC_STATUS%"));
-  auto failure_chain = route_config_builder.BuildRouteFailureFilterChain();
-  EXPECT_THAT(failure_chain, IsFilterChain(::testing::ElementsAre(
-                                 IsAccessLogFilter(), IsRouteFailureFilter())));
-}
-
-TEST_F(XdsAccessLogInjectionTest, NoAccessLogConfigGivesNoRouteFailureChain) {
-  std::vector<XdsListenerResource::HttpConnectionManager::HttpFilter>
-      hcm_filters = {MakeHcmFilter("filter1", "hcm")};
-  XdsRouting::RouteConfigFilterChainBuilder route_config_builder(
-      hcm_filters, registry_, builder_, *transport_factory_, *blackboard_);
-  auto failure_chain = route_config_builder.BuildRouteFailureFilterChain();
-  ASSERT_TRUE(failure_chain.ok()) << failure_chain.status();
-  EXPECT_EQ(*failure_chain, nullptr);
-}
-
-// Without a sink, nothing can be logged, so the caller keeps the old
-// error path.
-TEST_F(XdsAccessLogInjectionTest, NoSinkFactoryGivesNoRouteFailureChain) {
-  SetOtelAccessLogSinkFactory(nullptr);
-  std::vector<XdsListenerResource::HttpConnectionManager::HttpFilter>
-      hcm_filters = {MakeHcmFilter("filter1", "hcm")};
-  XdsRouting::RouteConfigFilterChainBuilder route_config_builder(
-      hcm_filters, registry_, builder_, *transport_factory_, *blackboard_,
-      MakeAccessLogConfig());
-  auto failure_chain = route_config_builder.BuildRouteFailureFilterChain();
-  ASSERT_TRUE(failure_chain.ok()) << failure_chain.status();
-  EXPECT_EQ(*failure_chain, nullptr);
+  ASSERT_EQ(filters.size(), 2u);
+  EXPECT_EQ(filters[1].first, XdsAccessLogRequestHeaderFilterFactory::Get());
+  EXPECT_EQ(filters[1].second, nullptr);
 }
 
 }  // namespace

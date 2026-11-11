@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "src/core/call/metadata_batch.h"
+#include "src/core/filter/access_log/access_log_filter.h"
 #include "src/core/lib/channel/channel_args.h"
 #include "src/core/lib/resource_quota/arena.h"
 #include "src/core/xds/grpc/xds_http_filter_registry.h"
@@ -83,11 +84,13 @@ class XdsRouting final {
       grpc_metadata_batch* initial_metadata, absl::string_view header_name,
       std::string* concatenated_value);
 
-  // Stores the status of a call that failed route selection in the call
-  // arena.  The route failure filter of the route failure chain (see
-  // RouteConfigFilterChainBuilder::BuildRouteFailureFilterChain()) fails
-  // the call with this status.  status must not be OK.
-  static void SetRouteFailureStatus(Arena* arena, absl::Status status);
+  // Builds the logger config for the access log call tracers from the
+  // HCM access log config (an XdsAccessLogConfig).  Gets each sink from
+  // the Blackboard, so equal sinks are shared across config updates.
+  // Returns null if access_log_config is null or no logger has a sink.
+  static RefCountedPtr<const AccessLogFilter::Config> MakeAccessLoggerConfig(
+      RefCountedPtr<const FilterConfig> access_log_config,
+      XdsTransportFactory& transport_factory, Blackboard& blackboard);
 
   // Logic for building filter chains for each route within a
   // RouteConfiguration.  Caching is done to avoid unnecessary work while
@@ -175,11 +178,11 @@ class XdsRouting final {
     // adding all of the xDS HTTP filters and right before building the
     // filter chain.  May be null if not needed.
     //
-    // If access_log_config is not null, the access log filter is added as
-    // the first filter of each chain.  If its templates also read request
+    // If access_log_config is not null and its templates read request
     // headers, the access log request header filter is added as the last
-    // filter before the terminal filter.  The access log config is also
-    // used for the route failure chain (see BuildRouteFailureFilterChain()).
+    // filter before the terminal filter.  The server uses it to capture
+    // the request headers after the xDS HTTP filters ran.  The client does
+    // not need it: the call attempt tracer sees those headers.
     RouteConfigFilterChainBuilder(
         const std::vector<
             XdsListenerResource::HttpConnectionManager::HttpFilter>&
@@ -195,24 +198,11 @@ class XdsRouting final {
       return VirtualHostFilterChainBuilder(*this, vhost);
     }
 
-    // Builds the chain for calls that fail route selection (for example,
-    // calls that match no route).  The chain holds the access log filter
-    // and then the route failure filter, which fails the call with the
-    // status set by SetRouteFailureStatus().  So the call still writes an
-    // access log record.  Other HCM filters are not added, because the
-    // call does not reach a route.
-    //
-    // Returns null if the HCM has no access log config or no access
-    // logger has a sink.  Then the caller returns the route selection
-    // error directly.
-    absl::StatusOr<RefCountedPtr<const FilterChain>>
-    BuildRouteFailureFilterChain();
-
    private:
     absl::StatusOr<RefCountedPtr<const FilterChain>> GetDefaultFilterChain();
 
-    // The HCM filters, with the access log filter (if any) first and the
-    // access log request header filter (if any) before the terminal filter.
+    // The HCM filters, with the access log request header filter (if any)
+    // before the terminal filter.
     std::vector<XdsListenerResource::HttpConnectionManager::HttpFilter>
         hcm_filter_configs_;
     XdsFilterChainBuilder& builder_;

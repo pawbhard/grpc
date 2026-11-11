@@ -227,18 +227,8 @@ XdsRouting::RouteConfigFilterChainBuilder::RouteConfigFilterChainBuilder(
       transport_factory_(transport_factory) {
   hcm_filter_configs_.reserve(hcm_filter_configs.size() + 2);
   factories_.reserve(hcm_filter_configs.size() + 2);
-  // The access log filter goes first, so that it sees the final status
-  // of the call, including statuses that later filters produce.
-  if (access_log_config != nullptr) {
-    const XdsHttpFilterFactory* factory = XdsAccessLogFilterFactory::Get();
-    XdsListenerResource::HttpConnectionManager::HttpFilter access_log_filter;
-    access_log_filter.name =
-        std::string(XdsAccessLogFilterFactory::kFilterName);
-    access_log_filter.config_proto_type = factory->ConfigProtoName();
-    access_log_filter.filter_config = access_log_config;
-    hcm_filter_configs_.push_back(std::move(access_log_filter));
-    factories_.push_back(factory);
-  }
+  // The access log is a call tracer (AccessLogServerCallTracer), not a
+  // filter.  Only the request header capture stays a filter.
   for (const auto& http_filter : hcm_filter_configs) {
     // Find filter.  This is guaranteed to succeed, because it's checked
     // at config validation time.
@@ -298,50 +288,19 @@ XdsRouting::RouteConfigFilterChainBuilder::GetDefaultFilterChain() {
   return default_filter_chain_;
 }
 
-absl::StatusOr<RefCountedPtr<const FilterChain>>
-XdsRouting::RouteConfigFilterChainBuilder::BuildRouteFailureFilterChain() {
-  // The constructor puts the access log filter (if any) first.  Read the
-  // config from that entry, because the constructor moved the
-  // access_log_config parameter.
-  if (factories_.empty() || factories_[0] != XdsAccessLogFilterFactory::Get() ||
-      hcm_filter_configs_[0].filter_config == nullptr) {
+RefCountedPtr<const AccessLogFilter::Config> XdsRouting::MakeAccessLoggerConfig(
+    RefCountedPtr<const FilterConfig> access_log_config,
+    XdsTransportFactory& transport_factory, Blackboard& blackboard) {
+  if (access_log_config == nullptr) return nullptr;
+  RefCountedPtr<const FilterConfig> config =
+      XdsAccessLogFilterFactory::Get()->MergeConfigs(
+          std::move(access_log_config), nullptr, nullptr, nullptr,
+          transport_factory, blackboard);
+  if (config == nullptr ||
+      DownCast<const AccessLogFilter::Config&>(*config).loggers.empty()) {
     return nullptr;
   }
-  const auto& access_log_entry = hcm_filter_configs_[0];
-  // MergeConfigs() gets the sink from the Blackboard, so this chain and
-  // the route chains share one sink.
-  RefCountedPtr<const FilterConfig> access_log_config =
-      factories_[0]->MergeConfigs(access_log_entry.filter_config, nullptr,
-                                  nullptr, nullptr, transport_factory_,
-                                  blackboard_);
-  // Without a logger with a sink, there is nothing to log.
-  if (access_log_config == nullptr ||
-      DownCast<const AccessLogFilter::Config&>(*access_log_config)
-          .loggers.empty()) {
-    return nullptr;
-  }
-  GRPC_TRACE_LOG(xds_resolver, INFO) << "Building route failure filter chain:";
-  GRPC_TRACE_LOG(xds_resolver, INFO)
-      << "  Adding filter=" << access_log_entry.name
-      << " config=" << access_log_config->ToString();
-  builder_.AddFilter(factories_[0], std::move(access_log_config));
-  GRPC_TRACE_LOG(xds_resolver, INFO)
-      << "  Adding filter=" << XdsRouteFailureFilterFactory::kFilterName
-      << " config=<null>";
-  builder_.AddFilter(XdsRouteFailureFilterFactory::Get(), nullptr);
-  absl::StatusOr<RefCountedPtr<const FilterChain>> filter_chain =
-      builder_.Build();
-  GRPC_TRACE_LOG(xds_resolver, INFO)
-      << "Filter chain creation status: " << filter_chain.status();
-  return filter_chain;
-}
-
-void XdsRouting::SetRouteFailureStatus(Arena* arena, absl::Status status) {
-  GRPC_CHECK(!status.ok());
-  RouteFailureContext* context = arena->New<RouteFailureContext>();
-  context->status = std::move(status);
-  // The arena calls the destructor when the call ends.
-  arena->SetContext<RouteFailureContext>(context);
+  return config.TakeAsSubclass<const AccessLogFilter::Config>();
 }
 
 namespace {

@@ -417,8 +417,9 @@ TEST_P(XdsOtelAccessLogEnd2endTest, FailedRpcIsLogged) {
 }
 
 // An RPC that matches no route fails before a route chain is selected.
-// The route failure chain still writes one record.  The RPC gets the same
-// status as without an access log.
+// The config selector adds the access log tracer before route selection,
+// so the RPC still writes one record.  The RPC gets the same status as
+// without an access log.
 TEST_P(XdsOtelAccessLogEnd2endTest, UnroutedRpcIsLogged) {
   RouteConfiguration route_config = GetParam().filter_on_server()
                                         ? default_server_route_config_
@@ -452,10 +453,10 @@ TEST_P(XdsOtelAccessLogEnd2endTest, UnroutedRpcIsLogged) {
       2u);
 }
 
-// ext_proc changes the request headers.  The access log filter is first in
-// the chain, so it sees the headers before ext_proc runs.  The request
-// header filter before the router captures them again, so the record shows
-// the changed headers, as Envoy does.
+// ext_proc changes the request headers.  The record shows the changed
+// headers, as Envoy does.  On the client, the call attempt tracer sees the
+// headers after the xDS filters.  On the server, the request header filter
+// before the router captures them again.
 TEST_P(XdsOtelAccessLogEnd2endTest, RecordShowsRequestHeadersAfterExtProc) {
   if (GetParam().filter_on_server()) {
     SKIP_TEST_FOR_PH2_SERVER("ext_proc is not yet supported with PH2");
@@ -510,9 +511,30 @@ TEST_P(XdsOtelAccessLogEnd2endTest, UnimplementedMethodIsLogged) {
       2u);
 }
 
-// RBAC is a later filter than the access log filter.  When RBAC denies the
-// RPC, the access log filter still sees the final status and writes one
-// record.  RBAC runs only on the server.
+// The record shows the response headers, the trailers, and the message
+// byte counts.  On the client, the record is written when the call ends.
+// So the trailers and byte counts of the attempt must be known by then.
+TEST_P(XdsOtelAccessLogEnd2endTest, RecordShowsResponseDataAndBytes) {
+  OpenTelemetryAccessLogConfig config = MakeAccessLogConfig();
+  config.mutable_body()->set_string_value(
+      "%RESP(x-echo)% %TRAILER(x-echo)% %BYTES_SENT% %BYTES_RECEIVED% "
+      "%DURATION%");
+  SetAccessLogConfig(config);
+  StartBackendServer();
+  CheckRpcSendOk(DEBUG_LOCATION, 1,
+                 RpcOptions()
+                     .set_metadata({{"x-echo", "v1"}})
+                     .set_echo_metadata_initially(true)
+                     .set_echo_metadata(true));
+  std::vector<LogRecord> log_records =
+      collector_->service()->WaitForLogRecords(1, absl::Seconds(10));
+  ASSERT_EQ(log_records.size(), 1u);
+  EXPECT_THAT(log_records[0].body().string_value(),
+              ::testing::MatchesRegex("v1 v1 [1-9][0-9]* [1-9][0-9]* [0-9]+"));
+}
+
+// When RBAC denies the RPC, the access log tracer still writes one record
+// with the RBAC status.  RBAC runs only on the server.
 TEST_P(XdsOtelAccessLogEnd2endTest, RbacDenialIsLogged) {
   if (!GetParam().filter_on_server()) {
     GTEST_SKIP() << "RBAC is a server-side filter";

@@ -117,6 +117,104 @@ TEST_F(CallTracerTest, MultipleServerCallTracers) {
             std::vector<std::string>({"Test", "Test", "Test"}));
 }
 
+// A client tracer with a trace ID, like a stats tracer.
+class TraceIdClientCallTracer : public FakeClientCallTracer {
+ public:
+  using FakeClientCallTracer::FakeClientCallTracer;
+  std::string TraceId() override { return "stats-trace-id"; }
+};
+
+// A server tracer with a trace ID, like a stats tracer.
+class TraceIdServerCallTracer : public FakeServerCallTracer {
+ public:
+  using FakeServerCallTracer::FakeServerCallTracer;
+  std::string TraceId() override { return "stats-trace-id"; }
+};
+
+TEST_F(CallTracerTest, AddClientCallTracerWithNoTracer) {
+  promise_detail::Context<Arena> arena_ctx(arena_.get());
+  FakeClientCallTracer added(&annotation_logger_);
+  AddClientCallTracerToContext(arena_.get(), &added);
+  ASSERT_NE(arena_->GetContext<CallSpan>(), nullptr);
+  EXPECT_EQ(arena_->GetContext<CallSpan>()->span_impl(), &added);
+}
+
+TEST_F(CallTracerTest, AddClientCallTracerAfterOneTracer) {
+  promise_detail::Context<Arena> arena_ctx(arena_.get());
+  TraceIdClientCallTracer stats(&annotation_logger_);
+  FakeClientCallTracer added(&annotation_logger_);
+  SetClientCallTracer(arena_.get(), {&stats});
+  AddClientCallTracerToContext(arena_.get(), &added);
+  CallSpan* span = arena_->GetContext<CallSpan>();
+  ASSERT_NE(span, nullptr);
+  EXPECT_TRUE(span->span_impl()->IsDelegatingTracer());
+  span->RecordAnnotation("Test");
+  EXPECT_EQ(annotation_logger_, std::vector<std::string>({"Test", "Test"}));
+  // The trace ID still comes from the first tracer.
+  EXPECT_EQ(span->TraceId(), "stats-trace-id");
+  auto* attempt_tracer =
+      arena_->GetContext<ClientCallTracer>()->StartNewAttempt(false);
+  attempt_tracer->RecordEnd();
+}
+
+TEST_F(CallTracerTest, AddClientCallTracerAfterDelegatingTracer) {
+  promise_detail::Context<Arena> arena_ctx(arena_.get());
+  TraceIdClientCallTracer stats1(&annotation_logger_);
+  FakeClientCallTracer stats2(&annotation_logger_);
+  FakeClientCallTracer added(&annotation_logger_);
+  SetClientCallTracer(
+      arena_.get(), std::vector<ClientCallTracerInterface*>{&stats1, &stats2});
+  CallSpan* before = arena_->GetContext<CallSpan>();
+  AddClientCallTracerToContext(arena_.get(), &added);
+  // The existing delegating tracer gets the new tracer.
+  EXPECT_EQ(arena_->GetContext<CallSpan>(), before);
+  before->RecordAnnotation("Test");
+  EXPECT_EQ(annotation_logger_,
+            std::vector<std::string>({"Test", "Test", "Test"}));
+  EXPECT_EQ(before->TraceId(), "stats-trace-id");
+}
+
+TEST_F(CallTracerTest, AddServerCallTracerWithNoTracer) {
+  promise_detail::Context<Arena> arena_ctx(arena_.get());
+  FakeServerCallTracer added(&annotation_logger_);
+  AddServerCallTracerToContext(arena_.get(), &added);
+  ASSERT_NE(arena_->GetContext<CallSpan>(), nullptr);
+  ASSERT_NE(arena_->GetContext<CallTracer>(), nullptr);
+  EXPECT_EQ(arena_->GetContext<CallSpan>()->span_impl(), &added);
+}
+
+TEST_F(CallTracerTest, AddServerCallTracerAfterOneTracer) {
+  promise_detail::Context<Arena> arena_ctx(arena_.get());
+  TraceIdServerCallTracer stats(&annotation_logger_);
+  FakeServerCallTracer added(&annotation_logger_);
+  SetServerCallTracer(arena_.get(), {&stats});
+  AddServerCallTracerToContext(arena_.get(), &added);
+  CallSpan* span = arena_->GetContext<CallSpan>();
+  ASSERT_NE(span, nullptr);
+  // Both contexts point to the same new delegating tracer.
+  EXPECT_EQ(static_cast<CallSpan*>(arena_->GetContext<CallTracer>()), span);
+  EXPECT_TRUE(span->span_impl()->IsDelegatingTracer());
+  span->RecordAnnotation("Test");
+  EXPECT_EQ(annotation_logger_, std::vector<std::string>({"Test", "Test"}));
+  EXPECT_EQ(span->TraceId(), "stats-trace-id");
+}
+
+TEST_F(CallTracerTest, AddServerCallTracerAfterDelegatingTracer) {
+  promise_detail::Context<Arena> arena_ctx(arena_.get());
+  TraceIdServerCallTracer stats1(&annotation_logger_);
+  FakeServerCallTracer stats2(&annotation_logger_);
+  FakeServerCallTracer added(&annotation_logger_);
+  SetServerCallTracer(
+      arena_.get(), std::vector<ServerCallTracerInterface*>{&stats1, &stats2});
+  CallSpan* before = arena_->GetContext<CallSpan>();
+  AddServerCallTracerToContext(arena_.get(), &added);
+  EXPECT_EQ(arena_->GetContext<CallSpan>(), before);
+  before->RecordAnnotation("Test");
+  EXPECT_EQ(annotation_logger_,
+            std::vector<std::string>({"Test", "Test", "Test"}));
+  EXPECT_EQ(before->TraceId(), "stats-trace-id");
+}
+
 TEST_F(CallTracerTest, ExtractResolvedAddressIPv4) {
   sockaddr_in addr4;
   memset(&addr4, 0, sizeof(addr4));

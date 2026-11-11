@@ -180,6 +180,19 @@ class AccessLogFilter final : public ImplementChannelFilter<AccessLogFilter> {
   RefCountedPtr<const Config> config_;
 };
 
+// Copies the headers in names from md to *out.
+void CaptureAccessLogHeaders(const grpc_metadata_batch& md,
+                             const std::set<std::string>& names,
+                             AccessLogCallData::HeaderMap* out);
+
+// Converts a peer URI ("ipv4:1.2.3.4:5") to "ip:port".
+std::string AccessLogPeerToAddress(absl::string_view peer);
+
+// Writes one record for each logger in config.  The access log filter and
+// the access log call tracers both use this function.
+void WriteAccessLogRecords(const AccessLogFilter::Config& config,
+                           const AccessLogCallData& data);
+
 // Captures the request headers for AccessLogFilter after all other xDS
 // HTTP filters ran.  The filter is placed last in each xDS filter chain
 // that has an AccessLogFilter whose templates read request headers.
