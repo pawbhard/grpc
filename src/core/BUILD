@@ -4526,6 +4526,7 @@ grpc_cc_library(
         "observable",
         "status_helper",
         "sync",
+        "//:call_tracer",
         "//:gpr",
         "//:grpc_base",
         "//:promise",
@@ -5900,6 +5901,116 @@ grpc_cc_library(
 )
 
 grpc_cc_library(
+    name = "access_log_formatter",
+    srcs = [
+        "filter/access_log/access_log_formatter.cc",
+    ],
+    hdrs = [
+        "filter/access_log/access_log_formatter.h",
+    ],
+    external_deps = [
+        "absl/container:flat_hash_map",
+        "absl/status",
+        "absl/status:statusor",
+        "absl/strings",
+        "absl/time",
+    ],
+    deps = [
+        "time",
+        "//:grpc_status",
+    ],
+)
+
+grpc_cc_library(
+    name = "access_log_filter",
+    srcs = [
+        "filter/access_log/access_log_filter.cc",
+    ],
+    hdrs = [
+        "filter/access_log/access_log_filter.h",
+        "filter/access_log/access_log_sink.h",
+    ],
+    external_deps = [
+        "absl/status",
+        "absl/status:statusor",
+        "absl/strings",
+        "absl/time",
+    ],
+    deps = [
+        "access_log_formatter",
+        "arena",
+        "blackboard",
+        "call_final_info",
+        "channel_args",
+        "context",
+        "default_event_engine",
+        "down_cast",
+        "filter_args",
+        "match",
+        "metadata_batch",
+        "time",
+        "unique_type_name",
+        "//:exec_ctx",
+        "//:gpr",
+        "//:grpc_base",
+        "//:ref_counted_ptr",
+        "//:uri",
+    ],
+)
+
+grpc_cc_library(
+    name = "access_log_call_tracer",
+    srcs = [
+        "filter/access_log/access_log_call_tracer.cc",
+    ],
+    hdrs = [
+        "filter/access_log/access_log_call_tracer.h",
+    ],
+    external_deps = [
+        "absl/base:core_headers",
+        "absl/strings",
+        "absl/time",
+    ],
+    deps = [
+        "access_log_filter",
+        "access_log_formatter",
+        "arena",
+        "call_final_info",
+        "message",
+        "metadata_batch",
+        "sync",
+        "time",
+        "//:call_tracer",
+        "//:gpr",
+        "//:grpc_base",
+        "//:grpc_status",
+        "//:ref_counted_ptr",
+    ],
+)
+
+grpc_cc_library(
+    name = "otel_access_log_sink",
+    srcs = [
+        "filter/access_log/otel_access_log_sink.cc",
+    ],
+    hdrs = [
+        "filter/access_log/otel_access_log_sink.h",
+    ],
+    external_deps = [
+        "absl/functional:any_invocable",
+        "absl/status",
+    ],
+    deps = [
+        "access_log_filter",
+        "no_destruct",
+        "ref_counted",
+        "sync",
+        "time",
+        "//:ref_counted_ptr",
+    ],
+)
+
+grpc_cc_library(
     name = "ext_proc_messages",
     srcs = [
         "filter/ext_proc/ext_proc_messages.cc",
@@ -6927,6 +7038,7 @@ grpc_cc_library(
         "protobuf_wrappers_upb",
         "upb_utils",
         "validation_errors",
+        "xds_access_log",
         "xds_bootstrap_grpc",
         "xds_common_types",
         "xds_common_types_parser",
@@ -7392,6 +7504,59 @@ grpc_cc_library(
 )
 
 grpc_cc_library(
+    name = "xds_access_log",
+    srcs = [
+        "xds/grpc/xds_access_log.cc",
+    ],
+    hdrs = [
+        "xds/grpc/xds_access_log.h",
+    ],
+    external_deps = [
+        "absl/functional:any_invocable",
+        "absl/log",
+        "absl/status",
+        "absl/strings",
+        "@com_google_protobuf//upb/reflection",
+    ],
+    tags = ["nofixdeps"],
+    deps = [
+        "access_log_filter",
+        "access_log_formatter",
+        "blackboard",
+        "down_cast",
+        "envoy_config_core_upb",
+        "filter_args",
+        "filter_chain",
+        "match",
+        "otel_access_log_sink",
+        "protobuf_duration_upb",
+        "protobuf_wrappers_upb",
+        "sync",
+        "time",
+        "unique_type_name",
+        "upb_utils",
+        "validation_errors",
+        "xds_bootstrap_grpc",
+        "xds_common_types",
+        "xds_common_types_parser",
+        "xds_grpc_service_parser",
+        "xds_http_filter",
+        "xds_server_grpc",
+        "//:envoy_config_accesslog_upb",
+        "//:envoy_extensions_access_loggers_grpc_upb",
+        "//:envoy_extensions_access_loggers_open_telemetry_upb",
+        "//:envoy_extensions_access_loggers_open_telemetry_upbdefs",
+        "//:exec_ctx",
+        "//:grpc_trace",
+        "//:opentelemetry_proto_common_upb",
+        "//:orphanable",
+        "//:ref_counted_ptr",
+        "//:xds_client",
+        "//:xds_transport",
+    ],
+)
+
+grpc_cc_library(
     name = "xds_matcher",
     srcs = [
         "xds/grpc/xds_matcher.cc",
@@ -7551,8 +7716,11 @@ grpc_cc_library(
     tags = ["nofixdeps"],
     visibility = ["//bazel:xds_client_grpc"],
     deps = [
+        "access_log_filter",
+        "arena",
         "blackboard",
         "channel_args",
+        "down_cast",
         "filter_args",
         "filter_chain",
         "grpc_check",
@@ -7560,6 +7728,7 @@ grpc_cc_library(
         "json",
         "metadata_batch",
         "slice",
+        "xds_access_log",
         "xds_http_filter",
         "xds_http_filter_registry",
         "xds_listener",
@@ -7756,10 +7925,14 @@ grpc_cc_library(
         "absl/strings",
     ],
     deps = [
+        "access_log_call_tracer",
+        "access_log_filter",
+        "arena",
         "blackboard",
         "channel_args",
         "channel_args_preconditioning",
         "channel_fwd",
+        "context",
         "down_cast",
         "grpc_check",
         "grpc_server_config_selector",
@@ -7773,6 +7946,7 @@ grpc_cc_library(
         "ref_counted",
         "resolved_address",
         "slice_refcount",
+        "status_helper",
         "sync",
         "unique_type_name",
         "useful",
@@ -9132,6 +9306,8 @@ grpc_cc_library(
         "re2",
     ],
     deps = [
+        "access_log_call_tracer",
+        "access_log_filter",
         "arena",
         "arena_promise",
         "blackboard",

@@ -41,6 +41,8 @@
 #include "src/core/credentials/transport/tls/grpc_tls_certificate_provider.h"
 #include "src/core/credentials/transport/transport_credentials.h"
 #include "src/core/credentials/transport/xds/xds_credentials.h"
+#include "src/core/filter/access_log/access_log_call_tracer.h"
+#include "src/core/filter/access_log/access_log_filter.h"
 #include "src/core/lib/address_utils/parse_address.h"
 #include "src/core/lib/address_utils/sockaddr_utils.h"
 #include "src/core/lib/channel/channel_args.h"
@@ -53,6 +55,8 @@
 #include "src/core/lib/iomgr/resolved_address.h"
 #include "src/core/lib/iomgr/sockaddr.h"
 #include "src/core/lib/iomgr/socket_utils.h"
+#include "src/core/lib/promise/context.h"
+#include "src/core/lib/resource_quota/arena.h"
 #include "src/core/server/server.h"
 #include "src/core/server/server_config_selector.h"
 #include "src/core/server/server_config_selector_filter.h"
@@ -62,6 +66,7 @@
 #include "src/core/util/host_port.h"
 #include "src/core/util/match.h"
 #include "src/core/util/ref_counted_ptr.h"
+#include "src/core/util/status_helper.h"
 #include "src/core/util/sync.h"
 #include "src/core/util/unique_type_name.h"
 #include "src/core/util/uri.h"
@@ -376,6 +381,7 @@ class XdsServerConfigFetcher::ListenerWatcher::XdsConnectionManager::
       XdsTransportFactory& transport_factory,
       const std::vector<XdsListenerResource::HttpConnectionManager::HttpFilter>&
           http_filters,
+      RefCountedPtr<const FilterConfig> access_log_config,
       std::shared_ptr<const XdsRouteConfigResource> route_config,
       Blackboard& blackboard);
 
@@ -443,6 +449,9 @@ class XdsServerConfigFetcher::ListenerWatcher::XdsConnectionManager::
 
   std::shared_ptr<const XdsRouteConfigResource> route_config_;
   std::vector<VirtualHost> virtual_hosts_;
+  // The logger config for the access log call tracer.  Null if the HCM
+  // has no access log.
+  RefCountedPtr<const AccessLogFilter::Config> access_logger_config_;
 };
 
 //
@@ -464,8 +473,8 @@ void XdsServerConfigFetcher::StartWatch(
       [self = RefAsSubclass<XdsServerConfigFetcher>(),
        listening_address = std::move(listening_address),
        watcher = std::move(watcher)]()
-          ABSL_EXCLUSIVE_LOCKS_REQUIRED(
-              &FetcherState::work_serializer) mutable {
+          ABSL_EXCLUSIVE_LOCKS_REQUIRED(&FetcherState::
+                                            work_serializer) mutable {
             ServerConfigFetcher::WatcherInterface* watcher_ptr = watcher.get();
             auto listener_watcher = MakeRefCounted<ListenerWatcher>(
                 self->fetcher_state_.Ref(DEBUG_LOCATION, "ListenerWatcher"),
@@ -546,8 +555,8 @@ void XdsServerConfigFetcher::ListenerWatcher::OnResourceChanged(
   fetcher_state_->work_serializer.Run(
       [self = RefAsSubclass<ListenerWatcher>(), listener = std::move(listener),
        read_delay_handle = std::move(read_delay_handle)]()
-          ABSL_EXCLUSIVE_LOCKS_REQUIRED(
-              &FetcherState::work_serializer) mutable {
+          ABSL_EXCLUSIVE_LOCKS_REQUIRED(&FetcherState::
+                                            work_serializer) mutable {
             if (!listener.ok()) {
               self->OnFatalError(AddMessagePrefix(
                   absl::StrCat("LDS resource ", self->ResourceName()),
@@ -982,8 +991,8 @@ class XdsServerConfigFetcher::ListenerWatcher::XdsConnectionManager::
     fetcher_state_->work_serializer.Run(
         [self = WeakRefAsSubclass<XdsServerConfigSelectorProvider>(),
          watcher = std::move(watcher)]()
-            ABSL_EXCLUSIVE_LOCKS_REQUIRED(
-                &FetcherState::work_serializer) mutable {
+            ABSL_EXCLUSIVE_LOCKS_REQUIRED(&FetcherState::
+                                              work_serializer) mutable {
               watcher->OnServerConfigSelectorUpdate(self->config_selector_);
               self->watchers_.insert(std::move(watcher));
             });
@@ -1032,8 +1041,8 @@ class XdsServerConfigFetcher::ListenerWatcher::XdsConnectionManager::
         [l4_filter_chain = l4_filter_chain_,
          route_config = std::move(route_config),
          read_delay_handle = std::move(read_delay_handle)]()
-            ABSL_EXCLUSIVE_LOCKS_REQUIRED(
-                &FetcherState::work_serializer) mutable {
+            ABSL_EXCLUSIVE_LOCKS_REQUIRED(&FetcherState::
+                                              work_serializer) mutable {
               l4_filter_chain->OnRouteConfigChanged(std::move(route_config));
             });
   }
@@ -1044,8 +1053,8 @@ class XdsServerConfigFetcher::ListenerWatcher::XdsConnectionManager::
     l4_filter_chain_->fetcher_state_->work_serializer.Run(
         [l4_filter_chain = l4_filter_chain_, status = std::move(status),
          read_delay_handle = std::move(read_delay_handle)]()
-            ABSL_EXCLUSIVE_LOCKS_REQUIRED(
-                &FetcherState::work_serializer) mutable {
+            ABSL_EXCLUSIVE_LOCKS_REQUIRED(&FetcherState::
+                                              work_serializer) mutable {
               l4_filter_chain->OnAmbientError(std::move(status));
             });
   }
@@ -1177,6 +1186,7 @@ XdsServerConfigFetcher::ListenerWatcher::XdsConnectionManager::L4FilterChain::
           .http_filter_registry(),
       *fetcher_state_->xds_client->transport_factory(),
       filter_chain_data_.http_connection_manager.http_filters,
+      filter_chain_data_.http_connection_manager.access_log_config,
       std::move(*route_config), *connection_manager_->blackboard_);
 }
 
@@ -1241,13 +1251,17 @@ XdsServerConfigFetcher::ListenerWatcher::XdsConnectionManager::L4FilterChain::
         const std::vector<
             XdsListenerResource::HttpConnectionManager::HttpFilter>&
             http_filters,
+        RefCountedPtr<const FilterConfig> access_log_config,
         std::shared_ptr<const XdsRouteConfigResource> route_config,
         Blackboard& blackboard) {
   auto config_selector = MakeRefCounted<XdsServerConfigSelector>();
   FilterListBuilder filter_list_builder;
+  // The builder adds the request header filter if the access log reads
+  // request headers.  ServerCallTracerFilter sees the headers before the
+  // xDS HTTP filters ran, so the tracer cannot capture the final headers.
   XdsRouting::RouteConfigFilterChainBuilder route_config_builder(
       http_filters, http_filter_registry, filter_list_builder,
-      transport_factory, blackboard);
+      transport_factory, blackboard, access_log_config);
   for (auto& vhost : route_config->virtual_hosts) {
     auto vhost_builder =
         route_config_builder.MakeVirtualHostFilterChainBuilder(vhost);
@@ -1265,6 +1279,10 @@ XdsServerConfigFetcher::ListenerWatcher::XdsConnectionManager::L4FilterChain::
           filter_list->TakeAsSubclass<const FilterList>();
     }
   }
+  // The access log is a call tracer, not a filter.  Build the logger
+  // config here, with the sinks, so that calls do not create sinks.
+  config_selector->access_logger_config_ = XdsRouting::MakeAccessLoggerConfig(
+      std::move(access_log_config), transport_factory, blackboard);
   config_selector->route_config_ = std::move(route_config);
   return config_selector;
 }
@@ -1312,6 +1330,16 @@ XdsServerConfigFetcher::ListenerWatcher::XdsConnectionManager::L4FilterChain::
   }
   absl::string_view authority =
       metadata->get_pointer(HttpAuthorityMetadata())->as_string_view();
+  // If the HCM has an access log, add the access log call tracer before
+  // route selection.  So a call that fails route selection also writes a
+  // record.
+  if (access_logger_config_ != nullptr) {
+    Arena* arena = MaybeGetContext<Arena>();
+    if (arena != nullptr) {
+      AccessLogServerCallTracer::AddToCall(arena, access_logger_config_,
+                                           *metadata);
+    }
+  }
   auto vhost_index = XdsRouting::FindVirtualHostForDomain(
       VirtualHostListIterator(virtual_hosts_), authority);
   if (!vhost_index.has_value()) {

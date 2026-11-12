@@ -489,3 +489,43 @@ grpc_cc_test(
         "@envoy_api//envoy/service/ext_proc/v3:pkg_cc_proto",
     ],
 )
+
+grpc_cc_test(
+    name = "access_log_formatter_test",
+    srcs = ["access_log_formatter_test.cc"],
+    external_deps = [
+        "absl/status",
+        "absl/time",
+        "gtest",
+        "gtest_main",
+    ],
+    uses_event_engine = False,
+    uses_polling = False,
+    deps = [
+        "//src/core:access_log_formatter",
+        "//src/core:time",
+    ],
+)
+
+grpc_cc_test(
+    name = "access_log_filter_test",
+    srcs = ["access_log_filter_test.cc"],
+    external_deps = [
+        "absl/status",
+        "gtest",
+        "gtest_main",
+    ],
+    uses_event_engine = False,
+    uses_polling = False,
+    deps = [
+        ":filter_matchers",
+        ":filter_test_v2",
+        "//:grpc",
+        "//:ref_counted_ptr",
+        "//src/core:access_log_filter",
+        "//src/core:access_log_formatter",
+        "//src/core:channel_args",
+        "//src/core:down_cast",
+        "//src/core:sync",
+    ],
+)

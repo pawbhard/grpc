@@ -29,16 +29,20 @@
 #include <vector>
 
 #include "src/core/call/metadata_batch.h"
+#include "src/core/filter/access_log/access_log_filter.h"
 #include "src/core/filter/filter_args.h"
 #include "src/core/filter/filter_chain.h"
 #include "src/core/lib/channel/channel_args.h"
 #include "src/core/lib/debug/trace.h"
+#include "src/core/lib/resource_quota/arena.h"
 #include "src/core/lib/slice/slice.h"
+#include "src/core/util/down_cast.h"
 #include "src/core/util/grpc_check.h"
 #include "src/core/util/json/json.h"
 #include "src/core/util/matchers.h"
 #include "src/core/util/ref_counted_ptr.h"
 #include "src/core/xds/grpc/blackboard.h"
+#include "src/core/xds/grpc/xds_access_log.h"
 #include "src/core/xds/grpc/xds_http_filter.h"
 #include "src/core/xds/grpc/xds_http_filter_registry.h"
 #include "src/core/xds/grpc/xds_listener.h"
@@ -217,12 +221,14 @@ XdsRouting::RouteConfigFilterChainBuilder::RouteConfigFilterChainBuilder(
         hcm_filter_configs,
     const XdsHttpFilterRegistry& http_filter_registry,
     XdsFilterChainBuilder& builder, XdsTransportFactory& transport_factory,
-    Blackboard& blackboard)
-    : hcm_filter_configs_(hcm_filter_configs),
-      builder_(builder),
+    Blackboard& blackboard, RefCountedPtr<const FilterConfig> access_log_config)
+    : builder_(builder),
       blackboard_(blackboard),
       transport_factory_(transport_factory) {
-  factories_.reserve(hcm_filter_configs.size());
+  hcm_filter_configs_.reserve(hcm_filter_configs.size() + 2);
+  factories_.reserve(hcm_filter_configs.size() + 2);
+  // The access log is a call tracer (AccessLogServerCallTracer), not a
+  // filter.  Only the request header capture stays a filter.
   for (const auto& http_filter : hcm_filter_configs) {
     // Find filter.  This is guaranteed to succeed, because it's checked
     // at config validation time.
@@ -231,7 +237,28 @@ XdsRouting::RouteConfigFilterChainBuilder::RouteConfigFilterChainBuilder(
             http_filter.config_proto_type);
     GRPC_CHECK_NE(factory, nullptr);
     // Add filter to list.
+    hcm_filter_configs_.push_back(http_filter);
     factories_.push_back(factory);
+  }
+  // Other filters (such as ext_authz and ext_proc) can change the request
+  // headers.  The access log must show the changed headers, so a second
+  // filter captures them after all other filters.  It goes before the
+  // terminal filter (the router), which is the last entry.
+  if (access_log_config != nullptr &&
+      XdsAccessLogRequestHeaderFilterFactory::NeedsRequestHeaderFilter(
+          *access_log_config)) {
+    const XdsHttpFilterFactory* factory =
+        XdsAccessLogRequestHeaderFilterFactory::Get();
+    XdsListenerResource::HttpConnectionManager::HttpFilter header_filter;
+    header_filter.name =
+        std::string(XdsAccessLogRequestHeaderFilterFactory::kFilterName);
+    header_filter.config_proto_type = factory->ConfigProtoName();
+    header_filter.filter_config = std::move(access_log_config);
+    size_t pos = hcm_filter_configs_.size();
+    if (pos > 0 && factories_[pos - 1]->IsTerminalFilter()) --pos;
+    hcm_filter_configs_.insert(hcm_filter_configs_.begin() + pos,
+                               std::move(header_filter));
+    factories_.insert(factories_.begin() + pos, factory);
   }
 }
 
@@ -259,6 +286,21 @@ XdsRouting::RouteConfigFilterChainBuilder::GetDefaultFilterChain() {
         << "Filter chain creation status: " << default_filter_chain_.status();
   }
   return default_filter_chain_;
+}
+
+RefCountedPtr<const AccessLogFilter::Config> XdsRouting::MakeAccessLoggerConfig(
+    RefCountedPtr<const FilterConfig> access_log_config,
+    XdsTransportFactory& transport_factory, Blackboard& blackboard) {
+  if (access_log_config == nullptr) return nullptr;
+  RefCountedPtr<const FilterConfig> config =
+      XdsAccessLogFilterFactory::Get()->MergeConfigs(
+          std::move(access_log_config), nullptr, nullptr, nullptr,
+          transport_factory, blackboard);
+  if (config == nullptr ||
+      DownCast<const AccessLogFilter::Config&>(*config).loggers.empty()) {
+    return nullptr;
+  }
+  return config.TakeAsSubclass<const AccessLogFilter::Config>();
 }
 
 namespace {

@@ -94,3 +94,38 @@ grpc_cc_library(
         "//src/core:telemetry_label",
     ],
 )
+
+grpc_cc_library(
+    name = "otel_access_log",
+    srcs = [
+        "otel_access_log.cc",
+    ],
+    hdrs = [
+        "otel_access_log.h",
+        "//:include/grpcpp/ext/otel_access_log.h",
+    ],
+    external_deps = [
+        "absl/log",
+        "absl/status",
+        "absl/synchronization",
+        "absl/time",
+        "otel/api",
+        "otel/exporters/otlp:otlp_recordable",
+        "otel/sdk:headers",
+        "otel/sdk/src/logs",
+        "otel/sdk/src/resource",
+        "protobuf_headers",
+    ],
+    tags = [
+        "grpc:otel-namespace-calamity",
+    ],
+    visibility = ["//bazel:otel_plugin"],
+    deps = [
+        "//:gpr_platform",
+        "//:grpc++",
+        "//:ref_counted_ptr",
+        "//src/core:access_log_filter",
+        "//src/core:otel_access_log_sink",
+        "@opentelemetry-proto//:logs_service_proto_cc",
+    ],
+)

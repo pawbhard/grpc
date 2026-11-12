@@ -189,7 +189,7 @@ class CallTracerInterface : public CallTracerAnnotationInterface {
 class ClientCallTracerInterface;
 class ServerCallTracerInterface;
 
-// Interface for a tracer that records activities on a call. Actual attempts for
+// Interface for a tracer that records activities on a call. Attempts for
 // this call are traced with CallAttemptTracer after invoking RecordNewAttempt()
 // on the ClientCallTracer object.
 class ClientCallTracerInterface : public CallTracerAnnotationInterface {
@@ -242,6 +242,10 @@ class ClientCallTracerInterface : public CallTracerAnnotationInterface {
   // RecordEnd() serves as an indication that the call stack is done with all
   // API calls, and the tracer library is free to destroy it after that.
   virtual CallAttemptTracer* StartNewAttempt(bool is_transparent_retry) = 0;
+  // Should be the last API call to the object. Once invoked, the tracer
+  // library is free to destroy the object.
+  virtual void RecordEnd(grpc_status_code status_code,
+                         absl::string_view error_string) = 0;
 };
 
 // Interface for a tracer that records activities on a server call.
@@ -378,6 +382,10 @@ class ClientCallTracer final : public CallSpan {
     return interface_->StartNewAttempt(is_transparent_retry);
   }
 
+  void RecordEnd(grpc_status_code status_code, absl::string_view error_string) {
+    interface_->RecordEnd(status_code, error_string);
+  }
+
  private:
   ClientCallTracerInterface* interface_;
 };
@@ -436,6 +444,20 @@ void SetClientCallTracer(Arena* arena,
 // ServerCallTracerFactory, which has yet to be made into a list.
 void SetServerCallTracer(Arena* arena,
                          absl::Span<ServerCallTracerInterface* const> tracer);
+
+// Adds one more tracer to a call that may already have tracers.
+// SetClientCallTracer() and SetServerCallTracer() must run before any
+// tracer is set.  These functions can run later, for example in a config
+// selector.  The new tracer goes after the existing tracers, so the trace
+// and span IDs still come from the first tracer.
+//
+// A client call tracer must be added before the first call attempt
+// starts.  Components that read the tracer from the arena after this call
+// see the new tracer.  Components that kept the old pointer do not.
+void AddClientCallTracerToContext(Arena* arena,
+                                  ClientCallTracerInterface* tracer);
+void AddServerCallTracerToContext(Arena* arena,
+                                  ServerCallTracerInterface* tracer);
 
 template <>
 struct ArenaContextType<CallTracer> {

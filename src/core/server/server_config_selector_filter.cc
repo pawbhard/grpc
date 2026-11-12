@@ -30,6 +30,7 @@
 #include "src/core/lib/resource_quota/arena.h"
 #include "src/core/lib/transport/transport.h"
 #include "src/core/server/server_config_selector.h"
+#include "src/core/telemetry/call_tracer.h"
 #include "src/core/util/grpc_check.h"
 #include "src/core/util/latent_see.h"
 #include "src/core/util/ref_counted_ptr.h"
@@ -150,6 +151,25 @@ class FilterChainBuilderImpl final : public FilterChainBuilder {
   std::unique_ptr<InterceptionChainBuilder> builder_;
 };
 
+// Tells the server call tracers the status of a call that this
+// interceptor or the selected filter chain ended.  ServerCallTracerFilter
+// does not see this status: the lower filters get it as a stream cancel,
+// not as trailing metadata.  Only failed calls are reported, so the stats
+// tracers do not get the trailing metadata of a normal call twice.
+void RecordFailedCallStatus(Arena* arena, ServerMetadata& md) {
+  if (md.get(GrpcStatusMetadata()).value_or(GRPC_STATUS_UNKNOWN) ==
+      GRPC_STATUS_OK) {
+    return;
+  }
+  auto* call_tracer = arena->GetContext<ServerCallTracer>();
+  if (call_tracer != nullptr) call_tracer->RecordSendTrailingMetadata(&md);
+}
+
+void RecordFailedCallStatus(Arena* arena, const absl::Status& status) {
+  ServerMetadataHandle md = ServerMetadataFromStatus(status);
+  RecordFailedCallStatus(arena, *md);
+}
+
 }  // namespace
 
 void ServerConfigSelectorInterceptor::OnConfigSelectorUpdate(
@@ -205,8 +225,10 @@ void ServerConfigSelectorInterceptor::InterceptCall(
                           << "[server_config_selector_interceptor "
                           << self.get() << "]: config selector returned error: "
                           << filter_chain.status();
-                      return absl::UnavailableError(
+                      absl::Status status = absl::UnavailableError(
                           StatusToString(filter_chain.status()));
+                      RecordFailedCallStatus(GetContext<Arena>(), status);
+                      return status;
                     }
                     // Start call on selected filter chain.
                     GRPC_TRACE_LOG(server_config_selector_interceptor, INFO)
@@ -218,7 +240,11 @@ void ServerConfigSelectorInterceptor::InterceptCall(
                         std::move(metadata), GetContext<Arena>()->Ref());
                     filter_chain_impl.destination()->StartCall(
                         std::move(unstarted_handler));
-                    ForwardCall(handler, initiator);
+                    ForwardCall(
+                        handler, initiator,
+                        [arena = GetContext<Arena>()](ServerMetadata& md) {
+                          RecordFailedCallStatus(arena, md);
+                        });
                     return absl::OkStatus();
                   });
             });

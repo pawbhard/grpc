@@ -38,6 +38,8 @@
 #include "src/core/client_channel/client_channel_internal.h"
 #include "src/core/client_channel/config_selector.h"
 #include "src/core/config/core_configuration.h"
+#include "src/core/filter/access_log/access_log_call_tracer.h"
+#include "src/core/filter/access_log/access_log_filter.h"
 #include "src/core/lib/channel/channel_args.h"
 #include "src/core/lib/channel/channel_fwd.h"
 #include "src/core/lib/channel/channel_stack.h"
@@ -224,6 +226,13 @@ class XdsResolver final : public Resolver {
                            XdsTransportFactory& transport_factory,
                            Blackboard& blackboard);
 
+    // The logger config for the access log call tracer.  Null if the HCM
+    // has no access log.
+    const RefCountedPtr<const AccessLogFilter::Config>& access_logger_config()
+        const {
+      return access_logger_config_;
+    }
+
    private:
     class RouteListIterator;
 
@@ -236,6 +245,7 @@ class XdsResolver final : public Resolver {
 
     std::map<absl::string_view, RefCountedPtr<ClusterRef>> clusters_;
     std::vector<RouteEntry> routes_;
+    RefCountedPtr<const AccessLogFilter::Config> access_logger_config_;
   };
 
   class XdsConfigSelector final : public ConfigSelector {
@@ -485,6 +495,10 @@ void XdsResolver::RouteConfigData::BuildFilterChains(
           vhost_builder.BuildFilterChainForRoute(route_entry.route);
     }
   }
+  // The access log is a call tracer, not a filter.  Build the logger
+  // config here, with the sinks, so that calls do not create sinks.
+  access_logger_config_ = XdsRouting::MakeAccessLoggerConfig(
+      hcm.access_log_config, transport_factory, blackboard);
 }
 
 absl::StatusOr<RefCountedPtr<ServiceConfig>>
@@ -669,6 +683,14 @@ absl::StatusOr<RefCountedPtr<const FilterChain>>
 XdsResolver::XdsConfigSelector::GetCallConfig(GetCallConfigArgs args) {
   Slice* path = args.initial_metadata->get_pointer(HttpPathMetadata());
   GRPC_CHECK_NE(path, nullptr);
+  // If the HCM has an access log, add the access log call tracer before
+  // route selection.  So a call that fails route selection also writes a
+  // record: the surface calls RecordEnd() for each call.
+  if (route_config_data_->access_logger_config() != nullptr) {
+    AccessLogClientCallTracer::AddToCall(
+        args.arena, route_config_data_->access_logger_config(),
+        *args.initial_metadata);
+  }
   auto* entry = route_config_data_->GetRouteForRequest(path->as_string_view(),
                                                        args.initial_metadata);
   if (entry == nullptr) {

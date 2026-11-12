@@ -50,6 +50,10 @@ std::string XdsListenerResource::HttpConnectionManager::ToString() const {
     }
     StrAppend(result, "]");
   }
+  if (access_log_config != nullptr) {
+    StrAppend(result, ", access_log=");
+    StrAppend(result, access_log_config->ToString());
+  }
   StrAppend(result, "}");
   return result;
 }

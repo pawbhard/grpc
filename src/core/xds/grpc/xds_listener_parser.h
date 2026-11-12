@@ -20,6 +20,7 @@
 #include "envoy/config/listener/v3/listener.upbdefs.h"
 #include "envoy/extensions/filters/network/http_connection_manager/v3/http_connection_manager.upbdefs.h"
 #include "src/core/util/down_cast.h"
+#include "src/core/xds/grpc/xds_access_log.h"
 #include "src/core/xds/grpc/xds_bootstrap_grpc.h"
 #include "src/core/xds/grpc/xds_http_filter_registry.h"
 #include "src/core/xds/grpc/xds_listener.h"
@@ -52,6 +53,7 @@ class XdsListenerResourceType final
         DownCast<const GrpcXdsBootstrap&>(xds_client->bootstrap())
             .http_filter_registry();
     http_filter_registry.PopulateSymtab(symtab);
+    XdsAccessLogFilterFactory::Get()->PopulateSymtab(symtab);
   }
 };
 

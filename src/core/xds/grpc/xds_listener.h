@@ -70,6 +70,10 @@ struct XdsListenerResource : public XdsResourceType::ResourceData {
     };
     std::vector<HttpFilter> http_filters;
 
+    // Access log config (an XdsAccessLogConfig), or null if no supported
+    // access logger is configured.
+    RefCountedPtr<const FilterConfig> access_log_config;
+
     bool operator==(const HttpConnectionManager& other) const {
       if (std::holds_alternative<std::string>(route_config)) {
         if (route_config != other.route_config) return false;
@@ -80,6 +84,14 @@ struct XdsListenerResource : public XdsResourceType::ResourceData {
             &other.route_config);
         if (rc2 == nullptr) return false;
         if (!(*rc1 == **rc2)) return false;
+      }
+      if ((access_log_config == nullptr) !=
+          (other.access_log_config == nullptr)) {
+        return false;
+      }
+      if (access_log_config != nullptr &&
+          *access_log_config != *other.access_log_config) {
+        return false;
       }
       return http_max_stream_duration == other.http_max_stream_duration &&
              http_filters == other.http_filters;
